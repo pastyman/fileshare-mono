@@ -34,6 +34,19 @@ function error_exit {
         echo "PM2 not found, installing it globally..."
         sudo npm install -g pm2
     fi
+
+    # Install unzip
+    if ! command -v unzip &> /dev/null; then
+        echo "unzip not found, installing it globally..."
+        sudo apt install unzip -y
+    fi
+
+    # Install Nginx if not already installed
+    if ! command -v nginx &> /dev/null; then
+        echo "Nginx not found. Installing Nginx..."
+        sudo apt install nginx -y
+    fi
+
 } | tee -a $LOG_FILE
 
 echo "Server dependencies installed successfully!"
