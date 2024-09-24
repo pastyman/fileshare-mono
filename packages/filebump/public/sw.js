@@ -696,7 +696,8 @@ console.log = function (message) { };
 
 const arrRequests = [];
 //const RANGE_SIZE = 1048576; //1 MB
-const RANGE_SIZE = 67108864; //64 MB
+const RANGE_SIZE = 8388608; //8 MB
+//const RANGE_SIZE = 67108864; //64 MB
 const TIMEOUT = 30000 //30 secs
 const broadcastToSw = new BroadcastChannel('channel-sfsw-tosw');
 const broadcastFromSw = new BroadcastChannel('channel-sfsw-fromsw');
