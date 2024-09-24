@@ -3,7 +3,7 @@ import hashtable from "alib-hashtable";
 export const filesender = () => {
   "use strict";
 
-  var FILE_SLICES = 256;
+  var FILE_SLICES = 512;
   var BINARY_CHUNK = 9000;
   var BASE64_CHUNK = 12000;
   var BASE64_BUFFER = 32;
@@ -27,6 +27,7 @@ export const filesender = () => {
     var start = range.startPos;
     var end = 0;
     var base64Buffer: string[] = [];
+    var base64Pos = 0;
     var percentage = 0;
     var reader = new FileReader();
     reader.onload = addToBuffer;
@@ -75,7 +76,7 @@ export const filesender = () => {
 
 
         //read or send from buffer
-        if (base64Buffer.length < BASE64_BUFFER) {
+        if ((base64Buffer.length - base64Pos) < BASE64_BUFFER) {
           //read and send
           reader.readAsDataURL(file.slice(start, end));
 
@@ -146,26 +147,31 @@ export const filesender = () => {
     }
 
     function sendBase64Chunk() {
-      if (base64Buffer.length > 0) {
-        var base64Str = base64Buffer.shift();
-
-        console.log("base64Buffer", base64Buffer)
-        console.log("base64Str", base64Str)
+      if (base64Pos < base64Buffer.length) {
+        var base64Str = base64Buffer[base64Pos]
+        base64Pos = base64Pos + 1;
+        // console.log("base64Buffer", base64Buffer)
+        // console.log("base64Str", base64Str)
 
         rtcSend(requestID + '=' + base64Str);
       }
 
-      if (end === endPos && base64Buffer.length === 0) {
+      if (end === endPos && (base64Pos === base64Buffer.length)) {
         //all file chunks have been sent
         finish();
       }
       else {
         //go to next chunk
+        //setTimeout(readChunk, 0);
         readChunk();
       }
     }
 
     function finish() {
+      //empty buffer
+      base64Buffer.length = 0;
+      base64Pos = 0;
+
       //raise pc change event
       uploadUpdateCallback(100);
 
