@@ -32,7 +32,7 @@ export const Header = () => {
             <Container uc="headerTitle">
               <Txt uc="headerTitle">FileBump</Txt>
             </Container>
-            <Container uc="headerVideo">
+            {/* <Container uc="headerVideo">
               {isHome ? (
                 <></>
               ) : (
@@ -40,7 +40,7 @@ export const Header = () => {
                   <source src="/video.mp4" type="video/mp4" />
                 </video>
               )}
-            </Container>
+            </Container> */}
           </Container>
 
 

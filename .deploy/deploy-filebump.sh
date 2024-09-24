@@ -107,6 +107,7 @@ echo "Installing dependencies for app..."
 npm install 2>&1 | tee /dev/tty || error_exit "npm install failed."
 
 # Start or reload the application with PM2
+cd ../
 echo "Starting the application with PM2 on port $APP_PORT..."
 if pm2 list | grep -q $APP_NAME; then
     echo "Application already running. Reloading..."

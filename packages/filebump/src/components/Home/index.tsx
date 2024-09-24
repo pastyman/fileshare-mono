@@ -4,9 +4,13 @@ import { Container, Spacer, Txt, StyledBox } from "ui-components"
 import { File, FileInfo } from "../File"
 
 export const Home = ({
-  onChange
+  onFileChange,
+  onRecieve,
+  onHome
 }: {
-  onChange: (files: FileList | null, fileInfo: FileInfo) => void
+  onFileChange: (files: FileList | null, fileInfo: FileInfo) => void
+  onRecieve: () => void
+  onHome: () => void
 }) => {
   const router = useRouter()
   const handleNavClick = (url: string) => {
@@ -21,6 +25,7 @@ export const Home = ({
       setShowFiles(false)
       setTimeout(() => {
         setShowFiles(true)
+        onHome()
       }, 30)
     }
   },  [router.route ] )
@@ -35,7 +40,7 @@ export const Home = ({
         <Spacer uc="small" />
         <Txt uc="boxTxt">To send files, click the Choose files button</Txt>
         <Spacer uc="small" />
-        {showFiles && <File onChange={onChange} />}
+        {showFiles && <File onChange={onFileChange} />}
       </StyledBox>
 
       <Spacer uc="medium" />
@@ -43,9 +48,7 @@ export const Home = ({
       <StyledBox
         uc="solidBox"
         ucHover="solidBoxHover"
-        onClick={() => {
-          handleNavClick("/handshake-recieve")
-        }}
+        onClick={() => onRecieve()}
       >
         <Txt uc="boxHeading">Recieve</Txt>
         <Spacer uc="small" />
