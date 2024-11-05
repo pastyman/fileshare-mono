@@ -1,3 +1,6 @@
+import '../css/global.css'
+import '../css/lib.css'
+import '../css/fonts/ptsans/css.css'
 import { useState } from 'react';
 import { AppProps } from 'next/app';
 import { NextRouter, useRouter } from "next/router";
@@ -33,14 +36,12 @@ function App({ Component, pageProps }: AppProps) {
     <>
       <Head>
         <link href="/css/fonts/ptsans/css.css" rel="stylesheet" />
-        <link href="/css/global.css" rel="stylesheet" />
-        <link href="/css/lib.css" rel="stylesheet" />
         <script src="/js/adapter-latest.js" />
       </Head>
       <Header />
-      <div style={{ visibility: router.route === "/" ? "visible" : "hidden", height: "0px" }}>
-        <Home onFileChange={handleFileChange} onRecieve={handleOnRecieve} onHome={handleOnHome} />
-      </div>
+        <div style={{ visibility: router.route === "/" ? "visible" : "hidden", height: "0px" }}>
+          <Home onFileChange={handleFileChange} onRecieve={handleOnRecieve} onHome={handleOnHome} />
+        </div>
       <main className="app">
         <Component fileInfo={fileInfo} {...pageProps} />
       </main>
@@ -48,6 +49,7 @@ function App({ Component, pageProps }: AppProps) {
   );
 }
 
+// export default App
 export default dynamic(() => Promise.resolve(App), {
   ssr: false,
 })

@@ -1,0 +1,13 @@
+/* pt-sans-regular - latin */
+@font-face {
+    font-family: 'PT Sans';
+    font-style: normal;
+    font-weight: 400;
+    src: url('/css/fonts/ptsans/pt-sans-v17-latin-regular.eot'); /* IE9 Compat Modes */
+    src: local(''),
+        url('/css/fonts/ptsans/pt-sans-v17-latin-regular.eot?#iefix') format('embedded-opentype'), /* IE6-IE8 */
+        url('/css/fonts/ptsans/pt-sans-v17-latin-regular.woff2') format('woff2'), /* Super Modern Browsers */
+        url('/css/fonts/ptsans/pt-sans-v17-latin-regular.woff') format('woff'), /* Modern Browsers */
+        url('/css/fonts/ptsans/pt-sans-v17-latin-regular.ttf') format('truetype'), /* Safari, Android, iOS */
+        url('/css/fonts/ptsans/pt-sans-v17-latin-regular.svg#PTSans') format('svg'); /* Legacy iOS */
+}

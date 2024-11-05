@@ -3,7 +3,7 @@
 ########################################################################
 
 #create install-server-deps.sh with contents from install-server-deps.sh
-nano install-server-deps.sh
+nano ./install-server-deps.sh
 
 #make executable
 chmod +x install-server-deps.sh
@@ -16,7 +16,7 @@ chmod +x install-server-deps.sh
 #create .env file with contents from ./packages/filebump/.env
 nano .env
 
-#create .env file with contents of your github ssh key
+#create id-github file with contents of your github ssh key
 nano ./id-github
 
 #change perms
@@ -30,3 +30,14 @@ chmod +x deploy-filebump.sh
 
 #run
 ./deploy-filebump.sh
+
+########################################################################
+
+#create start-filebump.sh with contents from start-filebump.sh
+nano ./start-filebump.sh
+
+#make executable
+chmod +x install-server-deps.sh
+
+#run
+./start-filebump.sh
