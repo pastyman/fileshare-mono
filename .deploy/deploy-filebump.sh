@@ -61,7 +61,7 @@ git clone "$REPO_SSH_URL" "$REPO_DIR" || error_exit "Failed to clone repository.
 # Check if the zip file exists in the cloned repo
 ZIP_FILE="$REPO_DIR/$ZIP_FILE_PATH"
 if [ ! -f "$ZIP_FILE" ]; then
-    error_exit "Zip file $ZIP_FILE_PATH not found in the repository!"
+   error_exit "Zip file $ZIP_FILE_PATH not found in the repository!"
 fi
 
 # Extract the zip file
@@ -105,21 +105,6 @@ fi
 cd $DESTINATION_FULLPATH_DIR
 echo "Installing dependencies for app..."
 npm install 2>&1 | tee /dev/tty || error_exit "npm install failed."
-
-# Start or reload the application with PM2
-cd ../
-echo "Starting the application with PM2 on port $APP_PORT..."
-if pm2 list | grep -q $APP_NAME; then
-    echo "Application already running. Reloading..."
-    pm2 reload $APP_NAME
-else
-    echo "Starting a new PM2 process..."
-    pm2 start npm --name $APP_NAME -- start -- $APP_NAME -- -p $APP_PORT
-fi
-
-# Save PM2 state (to reload on reboot)
-echo "Saving PM2 process list..."
-pm2 save
 
 # Modify default Nginx configuration to proxy requests to Node.js app
 echo "Modifying default Nginx configuration to proxy to Node.js app..."

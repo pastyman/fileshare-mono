@@ -28,7 +28,7 @@ export const Home = ({
         onHome()
       }, 30)
     }
-  },  [router.route ] )
+  }, [router.route])
 
   return (
     <Container uc="main">
@@ -40,7 +40,9 @@ export const Home = ({
         <Spacer uc="small" />
         <Txt uc="boxTxt">To send files, click the Choose files button</Txt>
         <Spacer uc="small" />
-        {showFiles && <File onChange={onFileChange} />}
+        <div style={{ minHeight: "85px" }}>
+          {showFiles && <File onChange={onFileChange} />}
+        </div>
       </StyledBox>
 
       <Spacer uc="medium" />
