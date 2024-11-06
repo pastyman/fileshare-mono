@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react"
-import { NextRouter, useRouter } from "next/router"
-import { Container, Spacer, Txt, StyledBox, Spinner, Loading } from "ui-components"
+import { useRouter } from "next/router"
+import { Container, Spacer } from "ui-components"
 import { client, serverSendRecieve, loadIce } from "rtc-client"
 import { FileInfo } from "../components/File"
-import { Connecting, Disconnected } from "../components/Status"
+import { Connecting } from "../components/Status"
 import { ViewFile } from "../components/ViewFile"
 import { swcomm } from "helpers"
 
@@ -65,7 +65,7 @@ export function Index() {
 
       const onConnectionClosed = () => {
         console.log("onConnectionClosed")
-        setStatus("disconnected")
+        router.replace(`/disconnected`)
       }
 
       //set up rtc client and connect to peer
@@ -97,8 +97,6 @@ export function Index() {
           ))}
         </>
       )}
-
-      {status === "disconnected" && (<Disconnected />)}
 
       <Spacer uc="medium" />
     </Container>

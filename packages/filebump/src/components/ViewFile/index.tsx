@@ -21,7 +21,7 @@ export const ViewFile = ({ file, index }: { file: any, index: number }) => {
       ucHover="solidBoxHover"
       onClick={() => handleOpenFile()}
     >
-      <Txt uc="boxHeading">{file.name}</Txt>
+      <Txt uc="boxHeading"><div style={{overflowWrap: "break-word"}}>{file.name}</div></Txt>
       <Spacer uc="small" />
       <Txt uc="boxTxt">{formatFileSize(file.size)}</Txt>
       <Spacer uc="medium" />
@@ -29,10 +29,10 @@ export const ViewFile = ({ file, index }: { file: any, index: number }) => {
         <div>
           <Spacer uc="small" />
           {isImage(file.name) && (
-            <img src={`/sfdownload/${index}/${file.size}/${file.name}`} width="320" />
+            <img src={`/sfdownload/${index}/${file.size}/${file.name}`} style={{width: "100%", maxWidth: "320px"}} />
           )}
           {isVideo(file.name) && (
-            <video width="320" controls><source src={`/sfdownload/${index}/${file.size}/${file.name}`} type="video/webm" /></video>
+            <video style={{width: "100%", maxWidth: "320px"}} controls><source src={`/sfdownload/${index}/${file.size}/${file.name}`} type="video/webm" /></video>
           )}
 
           <Spacer uc="medium" />

@@ -20,30 +20,17 @@ export const Header = () => {
       <Spacer uc="medium" />
       <Container uc="header">
         <Container uc="headerContent">
-
           <Container uc="rowBox">
-            <IconButton aria-label="delete">
-              <Home
-                onClick={() => {
-                  handleNavClick("/")
-                }}
-              />
+            <IconButton aria-label="home"
+              onClick={() => {
+                handleNavClick("/")
+              }}>
+              <Home />
             </IconButton>
             <Container uc="headerTitle">
               <Txt uc="headerTitle">FileBump</Txt>
             </Container>
-            {/* <Container uc="headerVideo">
-              {isHome ? (
-                <></>
-              ) : (
-                <video width="100px" autoPlay muted loop style={{ borderRadius: "5px" }}>
-                  <source src="/video.mp4" type="video/mp4" />
-                </video>
-              )}
-            </Container> */}
           </Container>
-
-
         </Container>
       </Container>
     </>
