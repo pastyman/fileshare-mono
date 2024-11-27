@@ -1,5 +1,5 @@
 import { useRouter } from "next/router"
-import { Container, Spacer, Txt, StyledBox, Spinner, Loading } from "ui-components"
+import { Container, Spacer, Txt, StyledBox, Spinner, Loading, ButtonAdd } from "ui-components"
 import IconButton from "@mui/material/IconButton"
 import Home from "@mui/icons-material/Home"
 
@@ -34,9 +34,9 @@ export const Connected = () => {
   )
 }
 
-export const Disconnected = () => {
+export const Disconnected = ({handleNavClick}: {handleNavClick : (usr: string) => void}) => {
   return (
-  <StyledBox
+    <StyledBox
     uc="solidBox"
     ucHover="solidBoxHover"
   >
@@ -45,7 +45,12 @@ export const Disconnected = () => {
     <Txt uc="boxTxt">You have been disconnected from your peer</Txt>
     <Spacer uc="small" />
     <Txt uc="boxTxt">Please try again</Txt>
-    <Spacer uc="small" />
+    <Spacer uc="medium" />
+    <ButtonAdd
+      text="Try again"
+      sx={{ marginLeft: "auto" }}
+      onClick={() => handleNavClick("/")}
+    />
   </StyledBox>
   )
 }

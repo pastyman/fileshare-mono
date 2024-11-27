@@ -3,12 +3,10 @@ import { useRouter } from "next/router"
 import { Container, Spacer } from "ui-components"
 import { client, serverSendRecieve, loadIce } from "rtc-client"
 import { FileInfo } from "../components/File"
-import { Connecting, Connected } from "../components/Status"
+import { Connecting, Connected, Disconnected } from "../components/Status"
 import { filesender } from "helpers"
 
 export function Index({ fileInfo }: { fileData: FileList, fileInfo: FileInfo }) {
-  console.log("fileInfo", fileInfo)
-
   const router = useRouter()
 
   const handleNavClick = (url: string) => {
@@ -81,7 +79,7 @@ export function Index({ fileInfo }: { fileData: FileList, fileInfo: FileInfo }) 
 
       const onConnectionClosed = () => {
         console.log("onConnectionClosed")
-        router.replace(`/disconnected`)
+        setStatus("disconnected")
       }
 
       //set up rtc client and connect to peer
@@ -101,6 +99,8 @@ export function Index({ fileInfo }: { fileData: FileList, fileInfo: FileInfo }) 
       {status === "connecting" && (<Connecting />)}
 
       {status === "connected" && (<Connected />)}
+
+      {status === "disconnected" && (<Disconnected handleNavClick={handleNavClick} />)}
 
       <Spacer uc="medium" />
     </Container>
