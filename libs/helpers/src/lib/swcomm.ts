@@ -59,7 +59,12 @@ export const swcomm = (downloadUpdateCallback: any, rtcObj: any) => {
   }
 
   function saveChunk(base64Chunk: string) {
-    broadcastToSw.postMessage(base64Chunk);
+    try {
+      broadcastToSw.postMessage(base64Chunk);
+    }
+    catch (exc) {
+      console.log(exc);
+    }
   }
 
   return {
