@@ -83,8 +83,14 @@ export function Index({ fileInfo }: { fileData: FileList, fileInfo: FileInfo }) 
       }
 
       //set up rtc client and connect to peer
-      rtcClient = client(iceConfig, onMessageRecieved, onConnectionSuccess, onConnectionClosed, handshakeServer.send);
-      rtcClient.connect(clientId, peerId, false)
+      if (iceConfig) {
+        rtcClient = client(iceConfig, onMessageRecieved, onConnectionSuccess, onConnectionClosed, handshakeServer.send);
+        rtcClient.connect(clientId, peerId, false)
+      }
+      else {
+        console.log("iceConfig not loaded")
+        router.replace(`/error?reason=ice-load-fail`)
+      }
     }
     if (clientId && peerId) {
       run()

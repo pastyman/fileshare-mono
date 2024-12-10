@@ -61,7 +61,7 @@ const Index = () => {
         <Spacer uc="medium" />
         <Txt uc="boxTxt">Enter pin provided by sender to recieve your files</Txt>
         <Spacer uc="medium" />
-        <Input sx={{}} type="text" value={secret} onChange={handleSecretChange} placeholder="6 digit pin" />
+        <Input sx={{}} type="number" value={secret} onChange={handleSecretChange} placeholder="6 digit pin" />
         <Spacer uc="medium" />
         <Container uc="rowBox">
           <ButtonAdd

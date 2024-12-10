@@ -17,6 +17,9 @@ export const rtc = (
 
   // Event Handlers
   peerConnection.onicecandidate = (e) => {
+    //ice candidate
+    console.log("ICE candidate event:", e);
+
     if (e.candidate) {
       console.log("Sending ICE candidate:", e.candidate);
       sendNegotiation("candidate", e.candidate)

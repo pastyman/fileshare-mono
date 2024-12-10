@@ -1,5 +1,6 @@
 import axios from "axios"
 import { NextApiRequest, NextApiResponse } from "next"
+import { IceResponse } from "types"
 
 let cache = null as any
 let cacheTime = 0
@@ -24,5 +25,10 @@ export default async function (req: NextApiRequest, res: NextApiResponse) {
     cache = { ...response.data.v, cacheTime }
   }
 
-  return res.status(200).json(cache)
+  //reshape output
+  let output: IceResponse = {
+    iceServers: [cache.iceServers]
+  }
+
+  return res.status(200).json(output)
 }

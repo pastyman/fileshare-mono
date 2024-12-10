@@ -1,6 +1,5 @@
 import axios from "axios"
-import { parse } from "path"
-import { Messaging } from "types"
+import { Messaging, IceResponse } from "types"
 
 //TODO - needs work
 const isClosed = (pollStart: number) => {
@@ -42,7 +41,7 @@ export const serverSendRecieve = (clientId: string, peerId: string, onMessageRec
       })
     }
 
-    if (isClosedSendRecieve(pollStart)){
+    if (isClosedSendRecieve(pollStart)) {
       closed = true;
       onTimeout();
     }
@@ -95,7 +94,7 @@ export const serverConnectSend = (onPeerId: (peerId: string | null) => void, onS
       onPeerId(null)
     }
     else {
-      if (isClosed(pollStart)){
+      if (isClosed(pollStart)) {
         closed = true;
         onTimeout();
       }
@@ -153,7 +152,7 @@ export const serverConnectRecieve = (onPeerId: (peerId: string | null) => void) 
   }
 }
 
-export const loadIce = async () => {
+export const loadIce = async (): Promise<IceResponse | null> => {
   const response = await axiosInstance.get(`/api/ice`)
   if (response.status === 200) {
     return response.data;
