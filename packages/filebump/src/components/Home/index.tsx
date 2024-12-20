@@ -5,16 +5,14 @@ import { File, FileInfo } from "../File"
 
 export const Home = ({
   onFileChange,
-  onRecieve,
-  onHome
+  onNavigate
 }: {
   onFileChange: (files: FileList | null, fileInfo: FileInfo) => void
-  onRecieve: () => void
-  onHome: () => void
+  onNavigate: any
 }) => {
   const router = useRouter()
   const handleNavClick = (url: string) => {
-    router.push(url)
+    onNavigate(url)
   }
 
   //used to clear the files on home return
@@ -25,7 +23,7 @@ export const Home = ({
       setShowFiles(false)
       setTimeout(() => {
         setShowFiles(true)
-        onHome()
+        handleNavClick("/")
       }, 30)
     }
   }, [router.route])
@@ -50,7 +48,7 @@ export const Home = ({
       <StyledBox
         uc="solidBox"
         ucHover="solidBoxHover"
-        onClick={() => onRecieve()}
+        onClick={() => handleNavClick("/handshake-recieve")}
       >
         <Txt uc="boxHeading">Recieve</Txt>
         <Spacer uc="small" />

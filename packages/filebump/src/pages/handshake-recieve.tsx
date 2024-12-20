@@ -1,18 +1,11 @@
 import { useState } from "react"
-import { useRouter } from "next/router"
 import { Container, Spacer, Txt, StyledBox, Input, ButtonAdd } from "ui-components"
 import { getUUID } from "helpers"
 import { serverConnectRecieve } from "rtc-client"
 
-const Index = () => {
-  const router = useRouter()
-
+const Index = ({ onNavigate }: { onNavigate: any }) => {
   const handleNavClick = (url: string, replace: boolean = false) => {
-    if (replace) {
-      router.replace(url)
-    } else {
-      router.push(url)
-    }
+    onNavigate(url, replace)
   }
 
   // State

@@ -7,12 +7,11 @@ import { Connecting, Disconnected } from "../components/Status"
 import { ViewFile } from "../components/ViewFile"
 import { swcomm } from "helpers"
 
-export function Index() {
-  const router = useRouter()
-
-  const handleNavClick = (url: string) => {
-    router.push(url)
+const Index = ({ onNavigate }: { onNavigate: any }) => {
+  const handleNavClick = (url: string, replace: boolean = false) => {
+    onNavigate(url, replace)
   }
+  const router = useRouter()
 
   const [status, setStatus] = useState("connecting")
   const [fileInfo, setFileInfo] = useState<FileInfo>([])
@@ -32,7 +31,7 @@ export function Index() {
       //set up handshake server
       const onTimeout = () => {
         //TODO, show user the 5 mins is up
-        router.replace(`/timeout?reason=timeout-recieve`)
+        handleNavClick(`/timeout?reason=timeout-recieve`, true)
       }
       const handshakeServer = serverSendRecieve(clientId, peerId, (from: string, to: string, data: object, rtcid: number) => rtcClient.handshakeMsgRecieve(from, to, data, rtcid), onTimeout);
 
@@ -79,7 +78,7 @@ export function Index() {
       }
       else {
         console.log("iceConfig not loaded")
-        router.replace(`/error?reason=ice-load-fail`)
+        handleNavClick(`/error?reason=ice-load-fail`, true)
       }
     }
     if (clientId && peerId) {

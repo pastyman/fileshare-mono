@@ -6,16 +6,15 @@ import { FileInfo } from "../components/File"
 import { Connecting, Connected, Disconnected } from "../components/Status"
 import { filesender } from "helpers"
 
-export function Index({ fileInfo }: { fileData: FileList, fileInfo: FileInfo }) {
-  const router = useRouter()
-
-  const handleNavClick = (url: string) => {
-    router.push(url)
+const Index = ({ fileInfo, onNavigate }: {fileInfo: FileInfo, onNavigate: any }) => {
+  const handleNavClick = (url: string, replace: boolean = false) => {
+    onNavigate(url, replace)
   }
 
   const [status, setStatus] = useState("connecting")
 
   //get client id's
+  const router = useRouter()
   const clientId = router.query.clientId as string;
   const peerId = router.query.peerId as string;
 
@@ -30,7 +29,7 @@ export function Index({ fileInfo }: { fileData: FileList, fileInfo: FileInfo }) 
       //set up handshake server
       const onTimeout = () => {
         //TODO, show user the 5 mins is up
-        router.replace(`/timeout?reason=timeout-send`)
+        handleNavClick(`/timeout?reason=timeout-send`, true)
       }
       const handshakeServer = serverSendRecieve(clientId, peerId, (from: string, to: string, data: object, rtcid: number) => rtcClient.handshakeMsgRecieve(from, to, data, rtcid), onTimeout);
 
@@ -89,7 +88,7 @@ export function Index({ fileInfo }: { fileData: FileList, fileInfo: FileInfo }) 
       }
       else {
         console.log("iceConfig not loaded")
-        router.replace(`/error?reason=ice-load-fail`)
+        handleNavClick(`/error?reason=ice-load-fail`, true)
       }
     }
     if (clientId && peerId) {

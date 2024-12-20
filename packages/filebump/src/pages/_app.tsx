@@ -1,7 +1,7 @@
 import '../css/global.css'
 import '../css/lib.css'
 import '../css/fonts/ptsans/css.css'
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { AppProps } from 'next/app';
 import { NextRouter, useRouter } from "next/router";
 import dynamic from "next/dynamic"
@@ -11,25 +11,46 @@ import { Home } from "../components/Home";
 import { Header } from "../components/Header";
 import NoSleep from "nosleep.js"
 
+function isActiveRoute(url: string) {
+  if (url === "/handshake-send" || url === "/handshake-recieve" || url === "/send" || url === "/recieve") {
+    return true
+  }
+  return false
+}
+
 function App({ Component, pageProps }: AppProps) {
   const router = useRouter()
   const noSleep = new NoSleep()
-
+  const [activeShare, setActiveShare] = useState<boolean>(false)
   const [fileInfo, setFileInfo] = useState<FileInfo>([])
   const handleFileChange = (files: FileList | null, fileInfo: FileInfo) => {
     setFileInfo(fileInfo)
     noSleep.enable()
     router.push("/handshake-send")
+    setActiveShare(true)
   }
 
-  const handleOnRecieve = () => {
-    noSleep.enable()
-    router.push("/handshake-recieve")
+  if (!activeShare && isActiveRoute(router.route)) {
+    //user has pressed refresh button on browser - redirect to home
+    router.push("/")
   }
 
-  const handleOnHome = () => {
-    console.log("disabling nosleep")
-    noSleep.disable()
+  const handleOnNavigate = (url: string, replace: boolean = false) => {
+    if (isActiveRoute(url.split("?")[0])) {
+      setActiveShare(true)
+      noSleep.enable()
+    }
+    else {
+      setActiveShare(false)
+      noSleep.disable()
+    }
+    
+    console.log("navigating to ", url)
+    if (replace) {
+      router.replace(url)
+    } else {
+      router.push(url)
+    }
   }
 
   return (
@@ -39,11 +60,11 @@ function App({ Component, pageProps }: AppProps) {
         <script src="/js/adapter-latest.js" />
       </Head>
       <Header />
-        <div style={{ visibility: router.route === "/" ? "visible" : "hidden", height: "0px" }}>
-          <Home onFileChange={handleFileChange} onRecieve={handleOnRecieve} onHome={handleOnHome} />
-        </div>
+      <div style={{ visibility: router.route === "/" ? "visible" : "hidden", height: "0px" }}>
+        <Home onFileChange={handleFileChange} onNavigate={handleOnNavigate} />
+      </div>
       <main className="app">
-        <Component fileInfo={fileInfo} {...pageProps} />
+        <Component onNavigate={handleOnNavigate} fileInfo={fileInfo} {...pageProps} />
       </main>
     </>
   );

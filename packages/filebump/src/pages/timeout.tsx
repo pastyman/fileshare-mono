@@ -1,13 +1,13 @@
 import { useRouter } from "next/router"
 import { Container, Spacer, Txt, StyledBox, ButtonAdd } from "ui-components"
 
-export function Index() {
+const Index = ({ onNavigate }: { onNavigate: any }) => {
+  const handleNavClick = (url: string, replace: boolean = false) => {
+    onNavigate(url, replace)
+  }
+
   const router = useRouter()
   const reason = router.query.reason
-
-  const handleNavClick = (url: string) => {
-    router.push(url)
-  }
 
   return (
     <Container uc="main">

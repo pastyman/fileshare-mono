@@ -1,19 +1,11 @@
 import { useState, useEffect } from "react"
-import { NextRouter, useRouter } from "next/router"
 import { Container, Spacer, Txt, StyledBox, Spinner, Loading } from "ui-components"
 import { getUUID } from "helpers"
 import { serverConnectSend } from "rtc-client"
 
-const Index = () => {
-  const router = useRouter()
-
+const Index = ({ onNavigate }: { onNavigate: any }) => {
   const handleNavClick = (url: string, replace: boolean = false) => {
-    if (replace) {
-      router.replace(url)
-    }
-    else {
-      router.push(url)
-    }
+    onNavigate(url, replace)
   }
 
   //state
@@ -42,7 +34,7 @@ const Index = () => {
   }
   const onTimeout = () => {
     //TODO, show user the 5 mins is up
-    router.replace(`/timeout?reason=timeout-handshake-send`)
+    handleNavClick(`/timeout?reason=timeout-handshake-send`, true)
   }
 
   //send to server
