@@ -24,7 +24,7 @@ const is2xx = (statusCode: number) =>
 
 const axiosInstance = axios.create({
   validateStatus: (status) => {
-    return is2xx(status) || status === 400
+    return true
   },
 })
 
@@ -135,15 +135,19 @@ export const serverConnectSend = (onPeerId: (peerId: string | null) => void, onS
   }
 }
 
-export const serverConnectRecieve = (onPeerId: (peerId: string | null) => void) => {
+export const serverConnectRecieve = (onPeerId: (peerId: string) => void, onError: (error: "incorrectPin" | "serverError") => void) => {
 
   const connectRecieve = async (clientId: string, secret: string) => {
     const response = await axiosInstance.get(`/api/connectRecieve?secret=${secret}&peerId=${clientId}`)
+   
     if (response.status === 200) {
       onPeerId(response.data.peerId);
     }
+    else if (response.status === 400) {
+      onError("incorrectPin");
+    }
     else {
-      onPeerId(null);
+      onError("serverError");
     }
   }
 

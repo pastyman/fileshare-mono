@@ -27,7 +27,5 @@ export default async function (req: NextApiRequest, res: NextApiResponse) {
   //update peerId
   await ConnectModel.findByIdAndUpdate(result.id, { $set: { peerId } })
 
-  console.log("recieve", { message: "saved", peerId: result.clientId })
-
   return res.status(200).json({ message: "saved", peerId: result.clientId })
 }

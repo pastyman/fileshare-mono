@@ -23,17 +23,6 @@ function App({ Component, pageProps }: AppProps) {
   const noSleep = new NoSleep()
   const [activeShare, setActiveShare] = useState<boolean>(false)
   const [fileInfo, setFileInfo] = useState<FileInfo>([])
-  const handleFileChange = (files: FileList | null, fileInfo: FileInfo) => {
-    setFileInfo(fileInfo)
-    noSleep.enable()
-    router.push("/handshake-send")
-    setActiveShare(true)
-  }
-
-  if (!activeShare && isActiveRoute(router.route)) {
-    //user has pressed refresh button on browser - redirect to home
-    router.push("/")
-  }
 
   const handleOnNavigate = (url: string, replace: boolean = false) => {
     if (isActiveRoute(url.split("?")[0])) {
@@ -41,7 +30,9 @@ function App({ Component, pageProps }: AppProps) {
       noSleep.enable()
     }
     else {
-      setActiveShare(false)
+      setTimeout(() => {
+        setActiveShare(false)        
+      }, 200);
       noSleep.disable()
     }
     
@@ -51,6 +42,16 @@ function App({ Component, pageProps }: AppProps) {
     } else {
       router.push(url)
     }
+  }
+
+  const handleFileChange = (files: FileList | null, fileInfo: FileInfo) => {
+    setFileInfo(fileInfo)
+    handleOnNavigate("/handshake-send")
+  }
+
+  if (!activeShare && isActiveRoute(router.route)) {
+    //user has pressed refresh button on browser - redirect to home
+    handleOnNavigate("/")
   }
 
   return (
