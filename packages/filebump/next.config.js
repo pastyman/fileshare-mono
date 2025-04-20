@@ -13,7 +13,7 @@ const nextConfig = {
     svgr: false,
   },
   compiler: {
-    removeConsole: true,
+    //removeConsole: true,
     reactRemoveProperties: true, 
   }
 };

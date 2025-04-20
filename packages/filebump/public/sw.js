@@ -702,15 +702,50 @@ const TIMEOUT = 30000 //30 secs
 const broadcastToSw = new BroadcastChannel('channel-sfsw-tosw');
 const broadcastFromSw = new BroadcastChannel('channel-sfsw-fromsw');
 
+const decodeChunkWithHeader = (binaryChunk) => {
+  const view = new DataView(binaryChunk);
+  const headerLength = view.getUint32(0); // Read first 4 bytes
+
+  const headerBytes = new Uint8Array(binaryChunk, 4, headerLength);
+  const headerText = new TextDecoder().decode(headerBytes);
+  const header = JSON.parse(headerText);
+
+  const chunkStart = 4 + headerLength;
+  const chunk = new Uint8Array(binaryChunk, chunkStart);
+
+  return { header, chunk };
+}
+
+const encodeChunkWithHeader = (header, binaryChunk) => {
+  const jsonHeader = header;
+  const encoder = new TextEncoder();
+  const headerBytes = encoder.encode(jsonHeader);
+  const headerLength = headerBytes.length;
+
+  const chunk = binaryChunk ?? new ArrayBuffer(0); // Default to empty buffer if undefined
+
+  const buffer = new ArrayBuffer(4 + headerLength + chunk.byteLength);
+  const view = new DataView(buffer);
+
+  view.setUint32(0, headerLength); // First 4 bytes = header size
+  new Uint8Array(buffer, 4, headerLength).set(headerBytes);
+  new Uint8Array(buffer, 4 + headerLength).set(new Uint8Array(chunk));
+
+  return buffer;
+};
+
 //listen to messages
 broadcastToSw.onmessage = (event) => {
+  const { header, chunk } =  decodeChunkWithHeader(event.data);
+  decodeChunkWithHeader(event)
+
   if (event.data.length > 0) {
     //get request id and data
-    var strRequestID = event.data.split('=')[0];
+    var strRequestID = header.requestID;
 
     console.log('sw recieved data RequestID', strRequestID)
     try {
-      arrRequests[parseInt(strRequestID)].push(event.data.substring(strRequestID.length + 1));
+      arrRequests[parseInt(strRequestID)].push(chunk);
     }
     catch (exc) {
       console.log('buffer write error', exc);
@@ -806,8 +841,8 @@ self.addEventListener('fetch', function (event) {
         function push() {
           //save chunks
           while (arrRequests[requestID] !== undefined && arrRequests[requestID].length() > 0 && isFinished === false && isError === false) {
-            var binaryData = base64toUint8Array(arrRequests[requestID].shift());
-            var binaryDataLength = binaryData.length;
+            var binaryData = arrRequests[requestID].shift();
+            var binaryDataLength = binaryData.byteLength;
 
             if (binaryDataLength > 0) {
               //set position
@@ -914,7 +949,7 @@ self.addEventListener('fetch', function (event) {
 
 //comms
 function sendMessageToClient(msg) {
-  broadcastFromSw.postMessage(JSON.stringify(msg));
+  broadcastFromSw.postMessage(encodeChunkWithHeader(JSON.stringify(msg)));
 }
 
 //high performace buffer implimantation
@@ -941,49 +976,6 @@ function zlib_buffer() {
   }
 
   return { push: push, shift: shift, clear: clear, length: getLength };
-}
-
-//base 64 to uint
-function base64toUint8Array(base64Str) {
-  //flag padding
-  var toRemove = 0;
-  if (base64Str.length > 1) {
-    if (base64Str[base64Str.length - 2] === '=') {
-      toRemove = 2;
-    }
-    else if (base64Str[base64Str.length - 1] === '=') {
-      toRemove = 1;
-    }
-  }
-
-  //set input
-  const input = base64Str.substring(0, base64Str.length - toRemove);
-  const keyStr = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
-  const bytes = Math.floor((input.length / 4) * 3, 10);
-  var uarray;
-  var chr1, chr2, chr3;
-  var enc1, enc2, enc3, enc4;
-  var i = 0;
-  var j = 0;
-  uarray = new Uint8Array(bytes);
-
-  for (i = 0; i < bytes; i += 3) {
-    //get the 3 octects in 4 ascii chars
-    enc1 = keyStr.indexOf(input[j++]);
-    enc2 = keyStr.indexOf(input[j++]);
-    enc3 = keyStr.indexOf(input[j++]);
-    enc4 = keyStr.indexOf(input[j++]);
-
-    chr1 = (enc1 << 2) | (enc2 >> 4);
-    chr2 = ((enc2 & 15) << 4) | (enc3 >> 2);
-    chr3 = ((enc3 & 3) << 6) | enc4;
-
-    uarray[i] = chr1;
-    uarray[i + 1] = chr2;
-    uarray[i + 2] = chr3;
-  }
-
-  return uarray;
 }
 
 function getMime(filename) {

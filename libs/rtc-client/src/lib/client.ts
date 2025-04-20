@@ -1,5 +1,6 @@
 import { buffer } from "./buffer";
 import { rtc, HandshakeData } from "./rtc";
+import {encodeChunkWithHeader, decodeChunkWithHeader} from "./convert";
 import { Messaging } from "types"
 
 //a wrapper that abstracts multiple rtc sessions into one
@@ -134,7 +135,7 @@ export const client = (
     }
   }
 
-  function send(message: string) {
+  function send(message: ArrayBuffer) {
     console.log('webrtcwrapper send message channel: ' + channel);
 
     if (channel === 0) {
@@ -203,7 +204,7 @@ export const client = (
     clearTimeout(THB);
 
     //send ping
-    send(JSON.stringify({ type: "ping" }));
+    send(encodeChunkWithHeader(JSON.stringify({ type: "ping" })));
 
     console.log('SEND PING', lastMessageFromPeer);
 
@@ -234,7 +235,7 @@ export const client = (
     }
 
 
-    send(JSON.stringify({ type: "disconnect" }));
+    send(encodeChunkWithHeader(JSON.stringify({ type: "disconnect" })));
     setTimeout(function () {
       closeConnection();
     }, 3000);

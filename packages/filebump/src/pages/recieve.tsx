@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/router"
 import { Container, Spacer } from "ui-components"
-import { client, serverSendRecieve, loadIce } from "rtc-client"
+import { client, serverSendRecieve, loadIce, decodeChunkWithHeader } from "rtc-client"
 import { FileInfo } from "../components/File"
 import { Connecting, Disconnected } from "../components/Status"
 import { ViewFile } from "../components/ViewFile"
@@ -49,18 +49,18 @@ const Index = ({ onNavigate }: { onNavigate: any }) => {
       }
 
       const onMessageRecieved = (data: any) => {
-        let message: { type: string, data?: any } = { type: "base64file" };
-        if (data.length > 0 && data[0] === "{") {
-          message = JSON.parse(data);
+        console.log("message recieved", data)
+
+
+        const { header, chunk } =  decodeChunkWithHeader(data);
+
+        console.log("message header", header)
+
+        if (header.type === "fileInfo") {
+          setFileInfo(header.data)
         }
 
-        //console.log("message recieved", message)
-
-        if (message.type === "fileInfo") {
-          setFileInfo(message.data)
-        }
-
-        if (message.type === "base64file") {
+        if (header.type === "send-file") {
           //this is base 64 file data
           serviceWorkerComm.saveChunk(data);
         }

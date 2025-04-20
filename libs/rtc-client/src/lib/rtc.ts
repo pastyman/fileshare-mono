@@ -133,7 +133,7 @@ export const rtc = (
     peerConnection.close();
   }
 
-  function send(message: string) {
+  function send(message: ArrayBuffer) {
     if (dataChannel.readyState === "open") {
       try {
         dataChannel.send(message);
