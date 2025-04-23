@@ -60,8 +60,12 @@ const Index = ({ onNavigate }: { onNavigate: any }) => {
           setFileInfo(header.data)
         }
 
-        if (header.type === "send-file") {
-          //this is base 64 file data
+        if (header.type === "file-send") {
+          //this is file data
+          serviceWorkerComm.saveChunk(data);
+        }
+        if (header.type === "file-end") {
+          //this is EOF
           serviceWorkerComm.saveChunk(data);
         }
       }

@@ -41,7 +41,7 @@ const Index = ({ fileInfo, onNavigate }: {fileInfo: FileInfo, onNavigate: any })
 
         setStatus("connected")
 
-        const payload = encodeChunkWithHeader(JSON.stringify({ type: "fileInfo", data: fileInfo }))
+        const payload = encodeChunkWithHeader({ type: "fileInfo", data: fileInfo })
 
 
         console.log("sending", payload)
@@ -55,21 +55,23 @@ const Index = ({ fileInfo, onNavigate }: {fileInfo: FileInfo, onNavigate: any })
       const onMessageRecieved = (data: any) => {
         const { header, chunk } =  decodeChunkWithHeader(data);
 
-        if (header.type === "send-file") {
+console.log("header", header)
+
+        if (header.type === "file-send") {
           //get file ref
           var filedom = document.getElementById('home-files');
           //@ts-ignore
-          const fileHandle = filedom.files[message.data.fileinfo.index];
+          const fileHandle = filedom.files[header.data.fileinfo.index];
 
           //send file
           if (fileHandle) {
-            fileSender.sendFile(fileHandle, header.requestID, header.range, rtcClient.send, rtcClient.bufferedAmount, () => { }, () => { });
+            fileSender.sendFile(fileHandle, header.data.requestID, header.data.range, rtcClient.send, rtcClient.bufferedAmount, () => { }, () => { });
           }
         }
 
         if (header.type === "cancel") {
           //cancel current upload
-          fileSender.cancelUpload(header.requestID);
+          fileSender.cancelUpload(header.data.requestID);
           console.log('canceled!');
         }
 
@@ -95,7 +97,11 @@ const Index = ({ fileInfo, onNavigate }: {fileInfo: FileInfo, onNavigate: any })
       run()
     }
 
-    return () => rtcClient && rtcClient.disconnect()
+    return () => 
+      {
+        rtcClient && rtcClient.disconnect();
+        fileSender.cancelAll();
+      }
   }, [clientId, peerId]);
 
   return (

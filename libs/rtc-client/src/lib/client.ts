@@ -136,7 +136,7 @@ export const client = (
   }
 
   function send(message: ArrayBuffer) {
-    console.log('webrtcwrapper send message channel: ' + channel);
+    //console.log('webrtcwrapper send message channel: ' + channel);
 
     if (channel === 0) {
       channel++;
@@ -204,7 +204,7 @@ export const client = (
     clearTimeout(THB);
 
     //send ping
-    send(encodeChunkWithHeader(JSON.stringify({ type: "ping" })));
+    send(encodeChunkWithHeader({ type: "ping" }));
 
     console.log('SEND PING', lastMessageFromPeer);
 
@@ -235,7 +235,7 @@ export const client = (
     }
 
 
-    send(encodeChunkWithHeader(JSON.stringify({ type: "disconnect" })));
+    send(encodeChunkWithHeader({ type: "disconnect" }));
     setTimeout(function () {
       closeConnection();
     }, 3000);

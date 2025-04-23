@@ -1,5 +1,5 @@
 export const encodeChunkWithHeader = (header: any, binaryChunk?: ArrayBuffer | SharedArrayBuffer | undefined): ArrayBuffer => {
-  const jsonHeader = header;
+  const jsonHeader = JSON.stringify(header);
   const encoder = new TextEncoder();
   const headerBytes = encoder.encode(jsonHeader);
   const headerLength = headerBytes.length;

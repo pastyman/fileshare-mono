@@ -80,13 +80,6 @@ export const filesender = () => {
         if (binaryBuffer.length < BASE64_BUFFER) {
           //read and send
           reader.readAsArrayBuffer(file.slice(start, end))
-          //reader.readAsDataURL(file.slice(start, end));
-
-          // var buffer = new Buffer(end - start);
-          // fs.read(file, buffer, 0, (end - start), start, function (e, l, b) {
-          //   addToBuffer(b);
-          // });
-
         }
         else {
           //just send
@@ -140,7 +133,10 @@ export const filesender = () => {
           const arrayBuffer = new Uint8Array(chunkBuffer).buffer;
           rtcSend(encodeChunkWithHeader({
             type: "file-send",
-            requestID
+            data: {
+              requestID
+            }
+            
           }, arrayBuffer));
         }
       }
@@ -166,10 +162,12 @@ export const filesender = () => {
       //send empty file chunk signifying end of file
       rtcSend(encodeChunkWithHeader({
         type: "file-end",
-        requestID
+        data: {
+          requestID
+        }
       }));
 
-      rtcSend(JSON.stringify({ type: "end" }));
+      //rtcSend(JSON.stringify({ type: "end" }));
 
       console.log("EXIT!");
     }
@@ -188,8 +186,19 @@ export const filesender = () => {
     });
   }
 
+    //cancel all
+    function cancelAll() {
+      requests.forEach((value: any, key: any) => {
+        requests.set({
+          requestID: value.requestID,
+          cancel: true
+        });
+      });
+    }
+
   return {
-    sendFile: sendFile,
-    cancelUpload: cancelUpload
+    sendFile,
+    cancelUpload,
+    cancelAll
   };
 }
