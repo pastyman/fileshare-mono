@@ -1,3 +1,5 @@
+import {encodeChunkWithHeader, decodeChunkWithHeader} from "rtc-client";
+
 export const swcomm = (downloadUpdateCallback: any, rtcObj: any) => {
   "use strict";
 
@@ -34,15 +36,23 @@ export const swcomm = (downloadUpdateCallback: any, rtcObj: any) => {
     broadcastFromSw.onmessage = (event: MessageEvent<any>) => {
       swDataAccept = true;
 
-      let msg = JSON.parse(event.data);
-      if (msg.type === "send") {
-        console.log('rtc command msg from sw!', msg);
+      const { header, chunk } =  decodeChunkWithHeader(event.data);
+
+      //let msg = JSON.parse(event.data);
+      if (header.type === "file-send") {
+        console.log('rtc command msg from sw!', header);
 
         //file request from service worker, forward to host via rtc
-        rtcObj.send(JSON.stringify(msg));
+        rtcObj.send(encodeChunkWithHeader(header));
       }
-      if (msg.type === "progress") {
-        downloadUpdateCallback(msg.data.percent);
+      if (header.type === "progress") {
+        downloadUpdateCallback(header.percent);
+      }
+      if (header.type === "cancel") {
+        console.log('rtc command msg from sw!', header);
+
+        //file request from service worker, forward to host via rtc
+        rtcObj.send(encodeChunkWithHeader(header));
       }
     };
   }
@@ -58,9 +68,9 @@ export const swcomm = (downloadUpdateCallback: any, rtcObj: any) => {
     });
   }
 
-  function saveChunk(base64Chunk: string) {
+  function saveChunk(binaryChunk: any) {
     try {
-      broadcastToSw.postMessage(base64Chunk);
+      broadcastToSw.postMessage(binaryChunk);
     }
     catch (exc) {
       console.log(exc);

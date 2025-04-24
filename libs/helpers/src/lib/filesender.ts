@@ -1,5 +1,8 @@
 //@ts-ignore
 import hashtable from "alib-hashtable";
+import { encodeChunkWithHeader } from "rtc-client";
+
+
 export const filesender = () => {
   "use strict";
 
@@ -26,7 +29,7 @@ export const filesender = () => {
     var percentSent = -1;
     var start = range.startPos;
     var end = 0;
-    var base64Buffer: string[] = [];
+    var binaryBuffer: Uint8Array[] = [];
     var percentage = 0;
     var reader = new FileReader();
     reader.onload = addToBuffer;
@@ -74,19 +77,13 @@ export const filesender = () => {
 
 
         //read or send from buffer
-        if (base64Buffer.length < BASE64_BUFFER) {
+        if (binaryBuffer.length < BASE64_BUFFER) {
           //read and send
-          reader.readAsDataURL(file.slice(start, end));
-
-          // var buffer = new Buffer(end - start);
-          // fs.read(file, buffer, 0, (end - start), start, function (e, l, b) {
-          //   addToBuffer(b);
-          // });
-
+          reader.readAsArrayBuffer(file.slice(start, end))
         }
         else {
           //just send
-          sendBase64Chunk();
+          sendBinaryChunk();
         }
       }
       else {
@@ -101,56 +98,50 @@ export const filesender = () => {
 
     function addToBuffer(evt: any) {
       if (start < end) {
-        //result of async reader output
-        var base64Str = evt.target.result;
-        base64Str = base64Str.substr(base64Str.indexOf(',') + 1);
+        const arrayBuffer = evt.target.result as ArrayBuffer;
 
         if (end - start > BINARY_CHUNK) {
-          //big file chunk, slice up !
-          var lStart = 0;
-          var lEnd = 0;
-          var chunkLength = base64Str.length;
+          // Large chunk, split into smaller pieces
+          let offset = 0;
+          const totalLength = arrayBuffer.byteLength;
 
-          var done = false;
-          while (done === false) {
-            lEnd = lStart + BASE64_CHUNK;
-            if (lEnd >= chunkLength) {
-              lEnd = chunkLength;
-              base64Buffer.push(base64Str.substring(lStart));
-            }
-            else {
-              base64Buffer.push(base64Str.substring(lStart, lEnd));
-            }
-
-            //inc
-            lStart = lEnd;
-
-            if (lEnd === chunkLength) {
-              done = true;
-            }
+          while (offset < totalLength) {
+            const sliceEnd = Math.min(offset + BINARY_CHUNK, totalLength);
+            const chunk = arrayBuffer.slice(offset, sliceEnd);
+            binaryBuffer.push(new Uint8Array(chunk));
+            offset = sliceEnd;
           }
 
-        }
-        else {
-          //standard file chunk
-          base64Buffer.push(base64Str);
+        } else {
+          // Small enough, push directly
+          binaryBuffer.push(new Uint8Array(arrayBuffer));
         }
       }
 
-      //inc
       start = end;
 
-      //send
-      sendBase64Chunk();
+      // Trigger your sending logic
+      sendBinaryChunk();
     }
 
-    function sendBase64Chunk() {
-      if (base64Buffer.length > 0) {
-        var base64Str = base64Buffer.shift()
-        rtcSend(requestID + '=' + base64Str);
+    function sendBinaryChunk() {
+      if (binaryBuffer.length > 0) {
+        const chunk = binaryBuffer.shift();
+
+        if (chunk) {
+          const chunkBuffer = chunk?.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength);
+          const arrayBuffer = new Uint8Array(chunkBuffer).buffer;
+          rtcSend(encodeChunkWithHeader({
+            type: "file-send",
+            data: {
+              requestID
+            }
+            
+          }, arrayBuffer));
+        }
       }
 
-      if (end === endPos && base64Buffer.length === 0) {
+      if (end === endPos && binaryBuffer.length === 0) {
         //all file chunks have been sent
         finish();
       }
@@ -169,9 +160,14 @@ export const filesender = () => {
       uploadFinishedCallback();
 
       //send empty file chunk signifying end of file
-      rtcSend(requestID + '=');
+      rtcSend(encodeChunkWithHeader({
+        type: "file-end",
+        data: {
+          requestID
+        }
+      }));
 
-      rtcSend(JSON.stringify({ type: "end" }));
+      //rtcSend(JSON.stringify({ type: "end" }));
 
       console.log("EXIT!");
     }
@@ -190,8 +186,19 @@ export const filesender = () => {
     });
   }
 
+    //cancel all
+    function cancelAll() {
+      requests.forEach((value: any, key: any) => {
+        requests.set({
+          requestID: value.requestID,
+          cancel: true
+        });
+      });
+    }
+
   return {
-    sendFile: sendFile,
-    cancelUpload: cancelUpload
+    sendFile,
+    cancelUpload,
+    cancelAll
   };
 }

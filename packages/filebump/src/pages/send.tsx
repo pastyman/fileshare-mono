@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/router"
 import { Container, Spacer } from "ui-components"
-import { client, serverSendRecieve, loadIce } from "rtc-client"
+import { client, serverSendRecieve, loadIce, decodeChunkWithHeader, encodeChunkWithHeader } from "rtc-client"
 import { FileInfo } from "../components/File"
 import { Connecting, Connected, Disconnected } from "../components/Status"
 import { filesender } from "helpers"
@@ -41,7 +41,10 @@ const Index = ({ fileInfo, onNavigate }: {fileInfo: FileInfo, onNavigate: any })
 
         setStatus("connected")
 
-        const payload = JSON.stringify({ type: "fileInfo", data: fileInfo })
+        const payload = encodeChunkWithHeader({ type: "fileInfo", data: fileInfo })
+
+
+        console.log("sending", payload)
 
         //send file info
         rtcClient.send(payload)
@@ -50,26 +53,25 @@ const Index = ({ fileInfo, onNavigate }: {fileInfo: FileInfo, onNavigate: any })
       }
 
       const onMessageRecieved = (data: any) => {
-        let message: { type: string, data?: any } = { type: "base64file" };
-        if (data.length > 0 && data[0] === "{") {
-          message = JSON.parse(data);
-        }
+        const { header, chunk } =  decodeChunkWithHeader(data);
 
-        if (message.type === "send") {
+console.log("header", header)
+
+        if (header.type === "file-send") {
           //get file ref
           var filedom = document.getElementById('home-files');
           //@ts-ignore
-          const fileHandle = filedom.files[message.data.fileinfo.index];
+          const fileHandle = filedom.files[header.data.fileinfo.index];
 
           //send file
           if (fileHandle) {
-            fileSender.sendFile(fileHandle, message.data.requestID, message.data.range, rtcClient.send, rtcClient.bufferedAmount, () => { }, () => { });
+            fileSender.sendFile(fileHandle, header.data.requestID, header.data.range, rtcClient.send, rtcClient.bufferedAmount, () => { }, () => { });
           }
         }
 
-        if (message.type === "cancel") {
+        if (header.type === "cancel") {
           //cancel current upload
-          fileSender.cancelUpload(message.data.requestID);
+          fileSender.cancelUpload(header.data.requestID);
           console.log('canceled!');
         }
 
@@ -95,7 +97,11 @@ const Index = ({ fileInfo, onNavigate }: {fileInfo: FileInfo, onNavigate: any })
       run()
     }
 
-    return () => rtcClient && rtcClient.disconnect()
+    return () => 
+      {
+        rtcClient && rtcClient.disconnect();
+        fileSender.cancelAll();
+      }
   }, [clientId, peerId]);
 
   return (
