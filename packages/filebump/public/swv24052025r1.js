@@ -51,7 +51,7 @@ var mimes = [
 ];
 
 //stop console log
-//console.log = function (message) { };
+console.log = function (message) { };
 
 const arrRequests = [];
 //const RANGE_SIZE = 1048576; //1 MB
@@ -95,13 +95,9 @@ const encodeChunkWithHeader = (header, binaryChunk) => {
 
 //listen to messages
 broadcastToSw.onmessage = (event) => {
-console.log("SW RECIEVED MESSAGE", event.data);
+//console.log("SW RECIEVED MESSAGE", event.data);
 
   const { header, chunk } =  decodeChunkWithHeader(event.data);
-
-
-  console.log("SW header", header)
-  console.log("event.data", event.data)
 
   if (header.type === "file-end") {
       var strRequestID = header.data.requestID;
@@ -162,7 +158,7 @@ self.addEventListener('fetch', function (event) {
     var isError = false;
     var lastDataRecievedTime = Date.now();
     const requestID = arrRequests.length;
-    arrRequests[requestID] = zlib_buffer();
+    arrRequests[requestID] = [];
     console.log('Handling fetch event for', url, base, requestID);
 
     //file name example
@@ -201,6 +197,23 @@ self.addEventListener('fetch', function (event) {
     var percentSent = -1;
     var pos = startPos;
 
+    //temp log
+    console.log({
+      type: "file-send",
+      data: {
+        requestID,
+        range: {
+          startPos,
+          endPos: endPos + 1
+        },
+        fileinfo: {
+          name: fileName,
+          size: fileSize,
+          index: fileIndex,
+        }
+      }
+    })
+
     //send request for file
     sendMessageToClient({
       type: "file-send",
@@ -224,12 +237,12 @@ self.addEventListener('fetch', function (event) {
       start(controller) {
         function push() {
           //save chunks
-          while (arrRequests[requestID] !== undefined && arrRequests[requestID].length() > 0 && isFinished === false && isError === false) {
+          while (arrRequests[requestID] !== undefined && arrRequests[requestID].length > 0 && isFinished === false && isError === false) {
             var binaryData = arrRequests[requestID].shift();
             var binaryDataLength = binaryData.byteLength;
 
 
-            console.log("binaryData.byteLength", binaryData.byteLength)
+            //console.log("binaryData.byteLength", binaryData.byteLength)
             if (binaryDataLength > 0) {
               //set position
               pos = pos + binaryDataLength;
@@ -297,6 +310,8 @@ self.addEventListener('fetch', function (event) {
             arrRequests[requestID] = undefined;
           }
           else {
+            //console.log('pushing next chunk', pos, endPos);
+
             //call next chunk
             setTimeout(push, 1);
           }
@@ -336,32 +351,6 @@ self.addEventListener('fetch', function (event) {
 //comms
 function sendMessageToClient(msg) {
   broadcastFromSw.postMessage(encodeChunkWithHeader(JSON.stringify(msg)));
-}
-
-//high performace buffer implimantation
-function zlib_buffer() {
-  "use strict";
-  var buffer = [];
-  //clear
-  function clear() {
-    buffer.length = 0;
-  }
-
-  function push(data) {
-    buffer.push(data);
-  }
-
-  //get length
-  function getLength() {
-    return buffer.length;
-  }
-
-  //gets first element
-  function shift() {
-    return buffer.shift();
-  }
-
-  return { push: push, shift: shift, clear: clear, length: getLength };
 }
 
 function getMime(filename) {

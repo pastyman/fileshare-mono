@@ -5,45 +5,59 @@ export const rtc = (
   receiveMessageCallback: (message: string, rtcid: number) => void,
   connectionEstablishedCallback: (rtcid: number) => void,
   connectionClosedCallback: () => void,
-  sendHandshakeMsgCallback: (order: number, from: string, to: string, data: { action: string; sdp: any }, rtcid: number) => void,
+  sendHandshakeMsgCallback: (
+    order: number,
+    from: string,
+    to: string,
+    data: { action: string; sdp: any },
+    rtcid: number
+  ) => void,
   rtcid: number
 ) => {
   let messageSendCount = 0;
   let user = "";
   let user2 = "";
-  const config = configuration;
-  const peerConnection = new RTCPeerConnection(config);
-  const dataChannel = peerConnection.createDataChannel(rtcid.toString());
 
-  // Event Handlers
+  const peerConnection = new RTCPeerConnection(configuration);
+
+  const dataChannel = peerConnection.createDataChannel(rtcid.toString(), {
+    ordered: true, // Maintain message order for reliability
+  });
+
+  // SDP optimization: increase throughput and message size
+  const mungeSDP = (sdp: string): string => {
+    sdp = sdp.replace(/a=mid:(.*)\r\n/g, 'a=mid:$1\r\nb=AS:1048576\r\n'); // 1 Gbps
+    if (!sdp.includes("a=max-message-size")) {
+      sdp += "a=max-message-size:262144\r\n"; // Max safe message size
+    }
+    return sdp;
+  };
+
   peerConnection.onicecandidate = (e) => {
-    //ice candidate
-    console.log("ICE candidate event:", e);
-
     if (e.candidate) {
       console.log("Sending ICE candidate:", e.candidate);
-      sendNegotiation("candidate", e.candidate)
+      sendNegotiation("candidate", e.candidate);
     }
   };
 
   dataChannel.onopen = () => {
     console.log("------ DATACHANNEL OPENED ------");
+    connectionEstablishedCallback(rtcid);
   };
 
   dataChannel.onclose = () => {
-    console.log("------ DC closed! ------ " + rtcid);
+    console.log("------ DataChannel CLOSED ------");
     connectionClosedCallback();
   };
 
   dataChannel.onerror = (error) => {
-    console.log("DC ERROR!!!", error);
+    console.error("DataChannel ERROR:", error);
     connectionClosedCallback();
   };
 
   peerConnection.ondatachannel = (ev) => {
-    console.log("peerConnection.ondatachannel event fired.");
     ev.channel.onopen = () => {
-      console.log("Data channel is open and ready to be used.");
+      console.log("Remote DataChannel is open");
       connectionEstablishedCallback(rtcid);
     };
     ev.channel.onmessage = (e) => {
@@ -51,109 +65,93 @@ export const rtc = (
     };
   };
 
-  function connect(fuser: string, fuser2: string, polite: boolean = false) {
+  const connect = (fuser: string, fuser2: string, polite = false) => {
     user = fuser;
     user2 = fuser2;
 
     const sdpConstraints = { offerToReceiveAudio: false, offerToReceiveVideo: false };
-    // var sdpConstraints = {
-    //   'mandatory':
-    //   {
-    //     'OfferToReceiveAudio': false,
-    //     'OfferToReceiveVideo': false
-    //   }
-    // };
 
-    const intializeConnection = async () => {
+    const initializeConnection = async () => {
       if (!polite) {
-        console.log("NOT POLITE MODE")
         const offer = await peerConnection.createOffer(sdpConstraints);
+        offer.sdp = mungeSDP(offer.sdp || '');
         await peerConnection.setLocalDescription(offer);
         sendNegotiation("offer", peerConnection.localDescription);
       }
-    }
-    intializeConnection();
-  }
+    };
 
-  function handshake(from: string, to: string, data: HandshakeData) {
-    console.log(`Handshake received from ${from} to ${to}:`, data);
+    initializeConnection().catch(console.error);
+  };
+
+  const handshake = (from: string, to: string, data: HandshakeData) => {
     if (to === user) {
-      if (data.action === "candidate") {
-        processIce(data.sdp);
-      } else if (data.action === "offer") {
-        processOffer(data.sdp);
-      } else if (data.action === "answer") {
-        processAnswer(data.sdp);
+      switch (data.action) {
+        case "candidate":
+          processIce(data.sdp);
+          break;
+        case "offer":
+          processOffer(data.sdp);
+          break;
+        case "answer":
+          processAnswer(data.sdp);
+          break;
       }
     }
-  }
+  };
 
-  function processOffer(offer: RTCSessionDescriptionInit) {
-    console.log("Processing offer:", offer);
-
-    const processWork = async () => {
-      // Set the remote description for the offer
+  const processOffer = async (offer: RTCSessionDescriptionInit) => {
+    try {
       await peerConnection.setRemoteDescription(offer);
-      // Create an answer to the offer
       const answer = await peerConnection.createAnswer();
+      answer.sdp = mungeSDP(answer.sdp || '');
       await peerConnection.setLocalDescription(answer);
       sendNegotiation("answer", peerConnection.localDescription);
+    } catch (e) {
+      console.error("Error processing offer:", e);
     }
-    processWork();
-  }
+  };
 
-  function processAnswer(answer: RTCSessionDescriptionInit) {
-    console.log("Processing answer:", answer);
-
-    const processWork = async () => {
-      try{
-      // Set the remote description for the answer
+  const processAnswer = async (answer: RTCSessionDescriptionInit) => {
+    try {
       await peerConnection.setRemoteDescription(answer);
-      }
-      catch(e){
-        console.log("processAnswer error", e);
-      }
+    } catch (e) {
+      console.error("Error processing answer:", e);
     }
-    processWork();
-  }
+  };
 
-  function processIce(iceCandidate: RTCIceCandidateInit) {
-    console.log("Processing ICE candidate:", iceCandidate);
+  const processIce = (iceCandidate: RTCIceCandidateInit) => {
     peerConnection.addIceCandidate(new RTCIceCandidate(iceCandidate))
-      .then(() => console.log("ICE candidate added successfully!"))
-      .catch((e) => console.log("Error adding ICE candidate:", e));
-  }
+      .then(() => console.log("ICE candidate added"))
+      .catch((e) => console.error("Error adding ICE candidate:", e));
+  };
 
-  function closeConnection() {
-    console.log("Closed connection called");
-
+  const closeConnection = () => {
     if (dataChannel.readyState === "open") {
       dataChannel.close();
     }
     peerConnection.close();
-  }
+    console.log("Peer connection closed");
+  };
 
-  function send(message: ArrayBuffer) {
+  const send = (message: ArrayBuffer) => {
     if (dataChannel.readyState === "open") {
       try {
         dataChannel.send(message);
       } catch (e) {
-        console.log("SEND MSG ERROR", e);
+        console.error("Send error:", e);
       }
     } else {
-      console.log("Data channel is not open. Message not sent.");
+      console.warn("DataChannel not open — message not sent");
     }
-  }
+  };
 
-  function bufferedAmount() {
-    return dataChannel ? dataChannel.bufferedAmount : null;
-  }
+  const bufferedAmount = () => dataChannel?.bufferedAmount ?? null;
 
-  function sendNegotiation(type: string, sdp: any) {
+  const sendNegotiation = (type: string, sdp: any) => {
     const data = { action: type, sdp };
-    messageSendCount = messageSendCount + 1;
+    messageSendCount++;
     sendHandshakeMsgCallback(messageSendCount, user, user2, data, rtcid);
-  }
+  };
 
   return {
     handshake,
