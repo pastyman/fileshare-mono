@@ -5,7 +5,7 @@ import { encodeChunkWithHeader } from "rtc-client";
 export const filesender = () => {
   "use strict";
 
-  var FILE_SLICES = 2;
+  var FILE_SLICES = 48;
   var BINARY_CHUNK = 12000;
   var BINARY_BUFFER_MAX_LENGTH = 32;
   var BUFFER_MAX = 4384; // 16384 - 12000
