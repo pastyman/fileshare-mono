@@ -1,7 +1,6 @@
 import { useState } from "react"
-import { useRouter } from "next/router"
-import { Container, Spacer, Txt, StyledBox, Spinner, Loading, ButtonSave } from "ui-components"
-import { formatFileSize, isImage, isVideo, isDownload } from "helpers"
+import { Spacer, Txt, StyledBox, ButtonSave } from "ui-components"
+import { formatFileSize, isImage, isVideo } from "helpers"
 
 export const ViewFile = ({ file, index }: { file: any, index: number }) => {
   const [openFile, setOpenFile] = useState(false)
@@ -12,7 +11,11 @@ export const ViewFile = ({ file, index }: { file: any, index: number }) => {
   }
 
   const handleDownloadFile = () => {
-    setDownloadFile(true)
+    setDownloadFile(false)
+
+    setTimeout(() => {
+      setDownloadFile(true)
+    }, 150)
   }
 
   return (

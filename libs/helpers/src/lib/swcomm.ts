@@ -18,7 +18,7 @@ export const swcomm = (downloadUpdateCallback: any, rtcObj: any) => {
 
         if (registrations.length === 0) {
           //service worker not already there - register
-          navigator.serviceWorker.register('/sw.js')
+          navigator.serviceWorker.register('/swv24052025r1.js')
             .then(function (reg) {
               console.log('SERVICE WORKER READY!!!');
             })

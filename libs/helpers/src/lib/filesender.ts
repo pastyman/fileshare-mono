@@ -2,14 +2,13 @@
 import hashtable from "alib-hashtable";
 import { encodeChunkWithHeader } from "rtc-client";
 
-
 export const filesender = () => {
   "use strict";
 
-  var FILE_SLICES = 512;
-  var BINARY_CHUNK = 9000;
-  var BASE64_CHUNK = 12000;
-  var BASE64_BUFFER = 32;
+  var FILE_SLICES = 1;
+  //var BINARY_CHUNK = 9000;
+  var BINARY_CHUNK = 12000;
+  var BINARY_BUFFER_MAX_LENGTH = 32;
   //var BUFFER_MAX = 16384;
   var BUFFER_MAX = 4384 ///16384 - 12000 (BUFFER_MAX - BASE64_CHUNK)
 
@@ -77,7 +76,7 @@ export const filesender = () => {
 
 
         //read or send from buffer
-        if (binaryBuffer.length < BASE64_BUFFER) {
+        if (binaryBuffer.length < BINARY_BUFFER_MAX_LENGTH) {
           //read and send
           reader.readAsArrayBuffer(file.slice(start, end))
         }
@@ -188,9 +187,10 @@ export const filesender = () => {
 
     //cancel all
     function cancelAll() {
-      requests.forEach((value: any, key: any) => {
+      const allRequests = requests.getCollection();
+      allRequests.forEach((item: any) => {
         requests.set({
-          requestID: value.requestID,
+          requestID: item.requestID,
           cancel: true
         });
       });
