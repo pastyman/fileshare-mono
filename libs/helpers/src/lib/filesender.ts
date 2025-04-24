@@ -5,7 +5,7 @@ import { encodeChunkWithHeader } from "rtc-client";
 export const filesender = () => {
   "use strict";
 
-  var FILE_SLICES = 1;
+  var FILE_SLICES = 2;
   //var BINARY_CHUNK = 9000;
   var BINARY_CHUNK = 12000;
   var BINARY_BUFFER_MAX_LENGTH = 32;
@@ -78,7 +78,7 @@ export const filesender = () => {
         //read or send from buffer
         if (binaryBuffer.length < BINARY_BUFFER_MAX_LENGTH) {
           //read and send
-          reader.readAsArrayBuffer(file.slice(start, end))
+          setTimeout(() => reader.readAsArrayBuffer(file.slice(start, end)), 0)
         }
         else {
           //just send
