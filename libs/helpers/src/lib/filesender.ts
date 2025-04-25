@@ -1,147 +1,91 @@
-//@ts-ignore
+// @ts-ignore
 import hashtable from "alib-hashtable";
 import { encodeChunkWithHeader } from "rtc-client";
 
 export const filesender = () => {
-  "use strict";
+  const BINARY_CHUNK = 12000;
+  const BUFFER_MAX = 16384; // Max safe rtcBufferedAmount
 
-  var FILE_SLICES = 48;
-  var BINARY_CHUNK = 12000;
-  var BINARY_BUFFER_MAX_LENGTH = 32;
-  var BUFFER_MAX = 4384; // 16384 - 12000
-
-  const requests = hashtable('requestID');
+  const requests = hashtable("requestID");
 
   function sendFile(
     file: File,
     requestID: number,
-    range: { startPos: number, endPos: number },
-    rtcSend: any,
-    rtcBufferedAmount: any,
-    uploadUpdateCallback: any,
-    uploadFinishedCallback: any
+    range: { startPos: number; endPos: number },
+    rtcSend: (data: ArrayBuffer) => void,
+    rtcBufferedAmount: () => number,
+    uploadUpdateCallback: (progress: number) => void,
+    uploadFinishedCallback: () => void
   ) {
     requests.set({ requestID, cancel: false });
 
-    console.log('SEND FILE');
-    console.log('requestID', requestID);
-    console.log('range', range);
+    let offset = range.startPos;
+    const endPos = range.endPos;
+    const totalLength = endPos - range.startPos;
+    let sentBytes = 0;
 
-    var endPos = range.endPos;
-    var percentSent = -1;
-    var start = range.startPos;
-    var end = 0;
-    var binaryBuffer: Uint8Array[] = [];
-    var readPointer = 0;
-    var percentage = 0;
-    var reader = new FileReader();
-    reader.onload = addToBuffer;
-    var THB: any = null;
+    const isCancelled = () => requests.get(requestID)?.cancel;
 
-    const isCancelled = () => requests.get(requestID).cancel;
-
-    console.log("file loaded...");
-    uploadUpdateCallback(0);
-
-    if (THB) {
-      clearTimeout(THB);
-      THB = null;
-    }
-
-    function readChunk() {
-      if (rtcBufferedAmount() !== null && rtcBufferedAmount() < BUFFER_MAX && !isCancelled()) {
-        if (start + (BINARY_CHUNK * FILE_SLICES) < endPos) {
-          end = start + (BINARY_CHUNK * FILE_SLICES);
-        } else {
-          end = endPos;
+    const stream = new ReadableStream({
+      async pull(controller) {
+        if (isCancelled()) {
+          controller.close();
+          return;
         }
 
-        percentage = Math.floor((end / endPos) * 100);
-        if (percentage > 99) percentage = 99;
-
-        if (percentSent !== percentage) {
-          percentSent = percentage;
-          uploadUpdateCallback(percentSent);
-        }
-
-        if (binaryBuffer.length - readPointer < BINARY_BUFFER_MAX_LENGTH) {
-          setTimeout(() => reader.readAsArrayBuffer(file.slice(start, end)), 0);
-        } else {
-          sendBinaryChunk();
-        }
-      } else {
-        if (!isCancelled() && rtcBufferedAmount() !== null) {
-          THB = setTimeout(readChunk, 0);
-        } else {
+        if (offset >= endPos) {
+          uploadUpdateCallback(100);
+          rtcSend(
+            encodeChunkWithHeader({ type: "file-end", data: { requestID } }, new ArrayBuffer(0))
+          );
           uploadFinishedCallback();
+          controller.close();
+          return;
         }
-      }
-    }
 
-    function addToBuffer(evt: any) {
-      // if (start < end) {
-        const arrayBuffer = evt.target.result as ArrayBuffer;
+        if (rtcBufferedAmount() >= BUFFER_MAX) {
+          setTimeout(() => controller.enqueue(null), 10);
+          return;
+        }
 
-          let offset = 0;
-          const totalLength = arrayBuffer.byteLength;
+        const nextEnd = Math.min(offset + BINARY_CHUNK, endPos);
+        const chunk = await file.slice(offset, nextEnd).arrayBuffer();
 
-          while (offset < totalLength) {
-            const sliceEnd = Math.min(offset + BINARY_CHUNK, totalLength);
-            const chunk = arrayBuffer.slice(offset, sliceEnd);
-            binaryBuffer.push(new Uint8Array(chunk));
-            offset = sliceEnd;
+        sentBytes += chunk.byteLength;
+        offset = nextEnd;
+
+        const progress = Math.floor((sentBytes / totalLength) * 100);
+        uploadUpdateCallback(Math.min(progress, 99));
+
+        rtcSend(
+          encodeChunkWithHeader(
+            { type: "file-send", data: { requestID } },
+            chunk
+          )
+        );
+
+        // Continue next chunk in next tick
+        setTimeout(() => {
+          try {
+            controller.enqueue(null)
           }
-
-      // }
-
-      start = end;
-      sendBinaryChunk();
-    }
-
-    function sendBinaryChunk() {
-      if (readPointer < binaryBuffer.length) {
-        const chunk = binaryBuffer[readPointer++];
-
-        if (chunk) {
-          const chunkBuffer = chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength);
-          const arrayBuffer = new Uint8Array(chunkBuffer).buffer;
-          rtcSend(encodeChunkWithHeader({
-            type: "file-send",
-            data: { requestID }
-          }, arrayBuffer));
-        }
+          catch (e) {
+            console.error("Error in enqueueing null", e)
+          }
+        }, 0);
       }
+    });
 
-      if (end === endPos && readPointer >= binaryBuffer.length) {
-        finish();
-      } else {
-        THB = setTimeout(readChunk, 0);
-      }
-
-      // Reset buffer when consumed
-      if (readPointer >= binaryBuffer.length && binaryBuffer.length > 0) {
-        binaryBuffer = [];
-        readPointer = 0;
-      }
-    }
-
-    function finish() {
-      uploadUpdateCallback(100);
-      uploadFinishedCallback();
-
-      rtcSend(encodeChunkWithHeader({
-        type: "file-end",
-        data: { requestID }
-      }));
-
-      console.log("EXIT!");
-    }
-
-    readChunk();
+    // Start reading stream
+    const reader = stream.getReader();
+    const loop = () => reader.read().then(({ done }) => {
+      if (!done) setTimeout(loop, 0);
+    });
+    loop();
   }
 
   function cancelUpload(requestID: number) {
-    console.log('cancelUpload ! request sent');
+    console.log("cancelUpload: request sent");
     requests.set({ requestID, cancel: true });
   }
 
