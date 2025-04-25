@@ -79,10 +79,9 @@ export const filesender = () => {
     }
 
     function addToBuffer(evt: any) {
-      if (start < end) {
+      // if (start < end) {
         const arrayBuffer = evt.target.result as ArrayBuffer;
 
-        if (end - start > BINARY_CHUNK) {
           let offset = 0;
           const totalLength = arrayBuffer.byteLength;
 
@@ -92,10 +91,8 @@ export const filesender = () => {
             binaryBuffer.push(new Uint8Array(chunk));
             offset = sliceEnd;
           }
-        } else {
-          binaryBuffer.push(new Uint8Array(arrayBuffer));
-        }
-      }
+
+      // }
 
       start = end;
       sendBinaryChunk();
