@@ -1,97 +1,113 @@
-// @ts-ignore
+//@ts-ignore
 import hashtable from "alib-hashtable";
 import { encodeChunkWithHeader } from "rtc-client";
 
-export const filesender = () => {
-  const BINARY_CHUNK = 12000;
-  const BUFFER_MAX = 16384; // Max safe rtcBufferedAmount
+const CHUNK_SIZE = 12_000;
+const BUFFER_MAX = 4384;
+const MAX_QUEUE = 32;
 
+export const filesender = () => {
   const requests = hashtable("requestID");
 
   function sendFile(
     file: File,
     requestID: number,
     range: { startPos: number; endPos: number },
-    rtcSend: (data: ArrayBuffer) => void,
-    rtcBufferedAmount: () => number,
-    uploadUpdateCallback: (progress: number) => void,
-    uploadFinishedCallback: () => void
+    rtcSend: any,
+    rtcBufferedAmount: any,
+    uploadUpdateCallback: any,
+    uploadFinishedCallback: any
   ) {
     requests.set({ requestID, cancel: false });
 
-    let offset = range.startPos;
-    const endPos = range.endPos;
-    const totalLength = endPos - range.startPos;
-    let sentBytes = 0;
+    console.log("SEND FILE");
+    console.log("requestID", requestID);
+    console.log("range", range);
 
-    const isCancelled = () => requests.get(requestID)?.cancel;
+    let queue: ArrayBuffer[] = [];
+    let done = false;
+    let totalSent = 0;
+    let percentSent = -1;
 
-    const stream = new ReadableStream({
-      async pull(controller) {
-        if (isCancelled()) {
-          controller.close();
-          return;
-        }
+    const isCancelled = () => requests.get(requestID).cancel;
 
-        if (offset >= endPos) {
-          uploadUpdateCallback(100);
-          rtcSend(
-            encodeChunkWithHeader({ type: "file-end", data: { requestID } }, new ArrayBuffer(0))
-          );
-          uploadFinishedCallback();
-          controller.close();
-          return;
-        }
+    uploadUpdateCallback(0);
 
-        if (rtcBufferedAmount() >= BUFFER_MAX) {
-          setTimeout(() => controller.enqueue(null), 10);
-          return;
-        }
+    const worker = createInlinePullWorker();
 
-        const nextEnd = Math.min(offset + BINARY_CHUNK, endPos);
-        const chunk = await file.slice(offset, nextEnd).arrayBuffer();
+    worker.onmessage = (e) => {
+      const { type, chunk, requestID: msgID } = e.data;
+      if (type === "chunk") {
+        queue.push(chunk);
+      } else if (type === "done") {
+        done = true;
+      }
+    };
 
-        sentBytes += chunk.byteLength;
-        offset = nextEnd;
+    worker.postMessage({
+      file,
+      start: range.startPos,
+      end: range.endPos,
+      chunkSize: CHUNK_SIZE,
+      requestID,
+    });
 
-        const progress = Math.floor((sentBytes / totalLength) * 100);
-        uploadUpdateCallback(Math.min(progress, 99));
+    function sendLoop() {
+      if (isCancelled()) {
+        worker.terminate();
+        console.log("Upload cancelled.");
+        return;
+      }
+
+      while (queue.length > 0 && rtcBufferedAmount() < BUFFER_MAX) {
+        const chunk = queue.shift()!;
+        totalSent += chunk.byteLength;
 
         rtcSend(
           encodeChunkWithHeader(
-            { type: "file-send", data: { requestID } },
+            {
+              type: "file-send",
+              data: { requestID },
+            },
             chunk
           )
         );
 
-        // Continue next chunk in next tick
-        setTimeout(() => {
-          try {
-            controller.enqueue(null)
-          }
-          catch (e) {
-            console.error("Error in enqueueing null", e)
-          }
-        }, 0);
+        const percent = Math.floor((totalSent / (range.endPos - range.startPos)) * 100);
+        if (percent !== percentSent && percent < 100) {
+          percentSent = percent;
+          uploadUpdateCallback(percent);
+        }
       }
-    });
 
-    // Start reading stream
-    const reader = stream.getReader();
-    const loop = () => reader.read().then(({ done }) => {
-      if (!done) setTimeout(loop, 0);
-    });
-    loop();
+      if (done && queue.length === 0) {
+        rtcSend(
+          encodeChunkWithHeader({
+            type: "file-end",
+            data: { requestID },
+          })
+        );
+        uploadUpdateCallback(100);
+        uploadFinishedCallback();
+        worker.terminate();
+        console.log("EXIT!");
+        return;
+      }
+
+      setTimeout(sendLoop, 0);
+    }
+
+    sendLoop();
   }
 
   function cancelUpload(requestID: number) {
-    console.log("cancelUpload: request sent");
+    console.log("cancelUpload ! request sent");
     requests.set({ requestID, cancel: true });
   }
 
   function cancelAll() {
-    const allRequests = requests.getCollection();
-    allRequests.forEach((item: any) => {
+    const all = requests.getCollection();
+    all.forEach((item: any) => {
       requests.set({ requestID: item.requestID, cancel: true });
     });
   }
@@ -99,6 +115,26 @@ export const filesender = () => {
   return {
     sendFile,
     cancelUpload,
-    cancelAll
+    cancelAll,
   };
 };
+
+function createInlinePullWorker(): Worker {
+  const workerCode = `
+    self.onmessage = async (e) => {
+      const { file, start, end, chunkSize, requestID } = e.data;
+      let offset = start;
+
+      while (offset < end) {
+        const sliceEnd = Math.min(offset + chunkSize, end);
+        const chunk = await file.slice(offset, sliceEnd).arrayBuffer();
+        self.postMessage({ type: 'chunk', chunk, requestID }, [chunk]);
+        offset = sliceEnd;
+      }
+
+      self.postMessage({ type: 'done', requestID });
+    };
+  `;
+  const blob = new Blob([workerCode], { type: "application/javascript" });
+  return new Worker(URL.createObjectURL(blob));
+}
