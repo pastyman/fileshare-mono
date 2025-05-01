@@ -61,8 +61,8 @@ function App({ Component, pageProps }: AppProps) {
         <link href="/css/fonts/ptsans/css.css" rel="stylesheet" />
         <script src="/js/adapter-latest.js" />
       </Head>
-      <Topbar />
-      <Header />
+      <Topbar onNavigate={handleOnNavigate} />
+      <Header onNavigate={handleOnNavigate} />
       <div style={{ visibility: router.route === "/" ? "visible" : "hidden", height: "0px" }}>
         <Home onFileChange={handleFileChange} onNavigate={handleOnNavigate} />
       </div>

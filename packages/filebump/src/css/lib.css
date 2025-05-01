@@ -13,15 +13,25 @@
 }
 
 .lib-container-topbarItem {
-  cursor: pointer;
+  background-color: black;
+  border-radius: 5px;
   color: white;
+  cursor: pointer;
+  margin-left: 5px;
   padding-top: 5px;
-  padding-left: 30px;
+  padding-left: 15px;
+  padding-right: 15px;
+  height: 30px;
   font-weight: bold;
+  transition: background-color 0.4s ease, color 0.4s ease;
+}
+
+.lib-container-topbarItem:hover {
+  background-color: white;
+  color: black;
 }
 
 .lib-container-header {
-  cursor: pointer;
   margin-left: auto;
   margin-right: auto;
   max-width: 1124px;
@@ -29,7 +39,6 @@
 }
 
 .lib-container-headerContent {
-  cursor: pointer;
   border: 1px #eee solid;
   background-color: #fbfbfb;
   border-radius: 16px;
@@ -77,7 +86,7 @@
   background-color: #EAF6F9;
 }
 
-.lib-container-solidBox {
+.lib-container-solidBoxLink {
   cursor: pointer;
   border: 1px #eee solid;
   padding: 15px;
@@ -86,20 +95,26 @@
   margin: 0 auto;
 }
 
-.lib-container-dropzoneBox {
+.lib-container-solidBoxLinkHover {
   cursor: pointer;
-  border: 1px #aaa dashed;
-  padding: 10px;
-  background-color: #fafafa;
-  border-radius: 6px;
+  border: 1px #eee solid;
+  padding: 15px;
+  background-color: #efefef;
+  border-radius: 16px;
   margin: 0 auto;
-  text-align: center;
-  align-items: center;
-  align-content: center;
+}
+
+.lib-container-solidBox {
+
+  border: 1px #eee solid;
+  padding: 15px;
+  background-color: #fbfbfb;
+  border-radius: 16px;
+  margin: 0 auto;
 }
 
 .lib-container-solidBoxHover {
-  cursor: pointer;
+
   border: 1px #eee solid;
   padding: 15px;
   background-color: #efefef;
@@ -160,6 +175,11 @@
 .lib-text-boxTxt {
   font-size: 16px;
   color: #999;
+}
+
+.lib-text-boxTxtInfo {
+  font-size: 16px;
+  color: #444;
 }
 
 .lib-text-searchHeading {

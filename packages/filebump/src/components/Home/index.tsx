@@ -12,7 +12,7 @@ export const Home = ({
 }) => {
   const router = useRouter()
   const handleNavClick = (url: string) => {
-    onNavigate(url)
+    onNavigate(url, true)
   }
 
   //used to clear the files on home return
@@ -46,8 +46,8 @@ export const Home = ({
       <Spacer uc="medium" />
 
       <StyledBox
-        uc="solidBox"
-        ucHover="solidBoxHover"
+        uc="solidBoxLink"
+        ucHover="solidBoxLinkHover"
         onClick={() => handleNavClick("/handshake-recieve")}
       >
         <Txt uc="boxHeading">Recieve</Txt>

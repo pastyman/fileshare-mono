@@ -1,12 +1,10 @@
-import { useRouter } from "next/router"
 import { Container, Spacer, Txt } from "ui-components"
 import IconButton from "@mui/material/IconButton"
 import Home from "@mui/icons-material/Home"
-export const Header = () => {
-  const router = useRouter()
 
+export const Header = ({ onNavigate }: { onNavigate: any }) => {
   const handleNavClick = (url: string) => {
-    router.push(url)
+    onNavigate(url)
   }
 
   return (

@@ -1,31 +1,28 @@
-import { useState, useEffect } from "react"
-import { useRouter } from "next/router"
 import { Container, Spacer, Txt, StyledBox, Button } from "ui-components"
-import IconButton from "@mui/material/IconButton"
-import Home from "@mui/icons-material/Home"
-export const Topbar = () => {
-  const router = useRouter()
-
+export const Topbar = ({ onNavigate }: { onNavigate: any }) => {
   const handleNavClick = (url: string) => {
-    router.push(url)
+    onNavigate(url)
   }
-
-  const [isHome, setIsHome] = useState(true)
-  useEffect(() => {
-    setIsHome(router.route === "/")
-  }, [router.route])
 
   return (
     <>
       <Container uc="topbar">
         <Container uc="topbarContent">
-          <Container uc="topbarItem">
+          <Container uc="topbarItem"
+            onClick={() => {
+              handleNavClick("/about")
+            }}
+          >
             ABOUT
           </Container>
           <Container uc="topbarItem">
             FEATURES
           </Container>
-          <Container uc="topbarItem">
+          <Container uc="topbarItem"
+            onClick={() => {
+              handleNavClick("/privacy")
+            }}          
+          >
             PRIVACY
           </Container>
           <Container uc="topbarItem">
@@ -33,7 +30,7 @@ export const Topbar = () => {
           </Container>
         </Container>
       </Container>
-  
+
     </>
   )
 }
