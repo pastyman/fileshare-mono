@@ -55,8 +55,6 @@ const Index = ({ fileInfo, onNavigate }: {fileInfo: FileInfo, onNavigate: any })
       const onMessageRecieved = (data: any) => {
         const { header, chunk } =  decodeChunkWithHeader(data);
 
-console.log("header", header)
-
         if (header.type === "file-send") {
           //get file ref
           var filedom = document.getElementById('home-files');

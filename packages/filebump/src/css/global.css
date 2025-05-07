@@ -4,6 +4,12 @@ body {
   margin: 0;
   font-family: "PT Sans" !important;
   background-color: #496EFF;
+
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+
 }
 
 #__next {

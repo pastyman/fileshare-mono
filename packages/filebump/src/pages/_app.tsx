@@ -1,13 +1,14 @@
 import '../css/global.css'
 import '../css/lib.css'
 import '../css/fonts/ptsans/css.css'
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { AppProps } from 'next/app';
-import { NextRouter, useRouter } from "next/router";
+import { useRouter } from "next/router";
 import dynamic from "next/dynamic"
 import Head from 'next/head';
 import { FileInfo } from "../components/File";
 import { Home } from "../components/Home";
+import { Topbar } from "../components/Topbar";
 import { Header } from "../components/Header";
 import NoSleep from "nosleep.js"
 
@@ -60,7 +61,8 @@ function App({ Component, pageProps }: AppProps) {
         <link href="/css/fonts/ptsans/css.css" rel="stylesheet" />
         <script src="/js/adapter-latest.js" />
       </Head>
-      <Header />
+      <Topbar onNavigate={handleOnNavigate} />
+      <Header onNavigate={handleOnNavigate} />
       <div style={{ visibility: router.route === "/" ? "visible" : "hidden", height: "0px" }}>
         <Home onFileChange={handleFileChange} onNavigate={handleOnNavigate} />
       </div>
