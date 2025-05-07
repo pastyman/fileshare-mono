@@ -8,6 +8,13 @@ export const Topbar = ({ onNavigate }: { onNavigate: any }) => {
     <>
       <Container uc="topbar">
         <Container uc="topbarContent">
+        <Container uc="topbarItem"
+            onClick={() => {
+              handleNavClick("/")
+            }}
+          >
+            HOME
+          </Container>
           <Container uc="topbarItem"
             onClick={() => {
               handleNavClick("/about")
@@ -15,8 +22,19 @@ export const Topbar = ({ onNavigate }: { onNavigate: any }) => {
           >
             ABOUT
           </Container>
-          <Container uc="topbarItem">
+          <Container uc="topbarItem"
+            onClick={() => {
+              handleNavClick("/features")
+            }}           
+          >
             FEATURES
+          </Container>
+          <Container uc="topbarItemDonate"
+            onClick={() => {
+              handleNavClick("/donate")
+            }}            
+          >
+            DONATE
           </Container>
           <Container uc="topbarItem"
             onClick={() => {
@@ -24,9 +42,6 @@ export const Topbar = ({ onNavigate }: { onNavigate: any }) => {
             }}          
           >
             PRIVACY
-          </Container>
-          <Container uc="topbarItem">
-            DONATE
           </Container>
         </Container>
       </Container>
