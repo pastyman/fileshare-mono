@@ -60,6 +60,7 @@ function App({ Component, pageProps }: AppProps) {
       <Head>
         <link href="/css/fonts/ptsans/css.css" rel="stylesheet" />
         <script src="/js/adapter-latest.js" />
+        <script defer data-domain="filebump.net" src="https://plausible.io/js/script.js"></script>
       </Head>
       <Topbar onNavigate={handleOnNavigate} />
       <Header onNavigate={handleOnNavigate} />
