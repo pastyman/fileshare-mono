@@ -32,10 +32,10 @@ export const ViewFile = ({ file, index }: { file: any, index: number }) => {
         <div>
           <Spacer uc="small" />
           {isImage(file.name) && (
-            <img src={`/sfdownload/${index}/${file.size}/${file.name}`} style={{width: "100%", maxWidth: "320px"}} />
+            <img src={`/sfdownload/${index}/${file.size}/${file.name}`} style={{width: "100%", maxWidth: "max-content"}} />
           )}
           {isVideo(file.name) && (
-            <video style={{width: "100%", maxWidth: "320px"}} controls><source src={`/sfdownload/${index}/${file.size}/${file.name}`} type="video/webm" /></video>
+            <video style={{width: "100%", aspectRatio: "4/3", backgroundColor: "black"}} controls><source src={`/sfdownload/${index}/${file.size}/${file.name}`} type="video/webm" /></video>
           )}
 
           <Spacer uc="medium" />
