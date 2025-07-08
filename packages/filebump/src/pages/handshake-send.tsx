@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react"
-import { Container, Spacer, Txt, StyledBox, Spinner, Loading } from "ui-components"
+import { Container, Spacer, Txt, StyledBox, Spinner, ButtonAdd } from "ui-components"
 import { getUUID } from "helpers"
 import { serverConnectSend } from "rtc-client"
+import CountdownTimer from "../components/CountdownTimer"
 
 const Index = ({ onNavigate }: { onNavigate: any }) => {
   const handleNavClick = (url: string, replace: boolean = false) => {
@@ -71,7 +72,33 @@ const Index = ({ onNavigate }: { onNavigate: any }) => {
           <Spacer uc="small" />
           <Txt uc="boxTxt">Click 'Recieve files'</Txt>
           <Spacer uc="small" />
-          <Txt uc="boxTxt">Enter the following 6 digit PIN: <b>{secret}</b></Txt>
+          <Txt uc="boxTxt">Enter the following 6 digit PIN:</Txt>
+          <Spacer uc="small" />
+          <CountdownTimer
+            initialTime={300}
+            activeMessage={(time) => (
+              <>
+                <Txt uc="boxTxtSecret">{secret}</Txt>
+                <Spacer uc="small" />
+                <Txt uc="boxTxt">
+                  This code  expires in: <b>{time}</b>
+                </Txt>
+              </>
+            )}
+            expiredMessage={
+              <>
+                <Txt uc="boxTxtSecret">
+                  Your code has expired. Please try again.
+                </Txt>
+                <Spacer uc="small" />
+                <ButtonAdd
+                  text="Try again"
+                  sx={{ marginLeft: "auto" }}
+                  onClick={() => handleNavClick("/")}
+                />
+              </>
+            }
+          />
           <Spacer uc="small" />
         </StyledBox>
       )}
