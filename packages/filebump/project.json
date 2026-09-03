@@ -34,7 +34,8 @@
         },
         "production": {
           "buildTarget": "filebump:build:production",
-          "dev": false
+          "dev": false,
+          "port": 7001
         }
       }
     },

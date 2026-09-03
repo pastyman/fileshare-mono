@@ -1,34 +1,23 @@
-import axios from "axios"
 import { NextApiRequest, NextApiResponse } from "next"
 import { IceResponse } from "types"
 
-let cache = null as any
-let cacheTime = 0
+const ICE_SERVERS: IceResponse = {
+  iceServers: [
+    { urls: "stun:stun.l.google.com:19302" },
+    {
+      urls: "turn:openrelay.metered.ca:80",
+      username: "openrelayproject",
+      credential: "openrelayproject",
+    },
+    {
+      urls: "turn:openrelay.metered.ca:443?transport=tcp",
+      username: "openrelayproject",
+      credential: "openrelayproject",
+    },
+  ],
+}
+
 // eslint-disable-next-line import/no-anonymous-default-export
-export default async function (req: NextApiRequest, res: NextApiResponse) {
-
-  if (Date.now() - cacheTime > 300000) {
-    cache = null
-  }
-  if (!cache) {
-    const response = await axios.put(
-      "https://global.xirsys.net/_turn/sharefolder",
-      { "format": "urls", "expire": "360" },
-      {
-        headers: {
-          "Authorization": "Basic " + btoa("parisvb:563fe5de-77e3-11e9-9ec3-0242ac110003"),
-          "Content-Type": "application/json"
-        }
-      }
-    )
-    cacheTime = Date.now()
-    cache = { ...response.data.v, cacheTime }
-  }
-
-  //reshape output
-  let output: IceResponse = {
-    iceServers: [cache.iceServers]
-  }
-
-  return res.status(200).json(output)
+export default function (req: NextApiRequest, res: NextApiResponse) {
+  return res.status(200).json(ICE_SERVERS)
 }
