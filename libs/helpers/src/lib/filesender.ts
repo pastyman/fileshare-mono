@@ -10,7 +10,7 @@ const BASE_CHUNK_SIZE = RTC_MAX_MESSAGE - HEADER_OVERHEAD;
 const INITIAL_BIG_SLICE = 512_000;
 const MIN_BIG_SLICE = 64_000;
 const MAX_BIG_SLICE = 4_194_304;
-const BUFFER_MAX = 524_288;
+const BUFFER_MAX = 1_048_576; // 1MB on the next round-robin channel
 const LOW_BYTES_PER_SEC = 2_000_000;
 const HIGH_BYTES_PER_SEC = 8_000_000;
 
@@ -28,6 +28,8 @@ type RequestState = {
   cancel: boolean;
   paused: boolean;
   resumeFn: (() => void) | null;
+  finishFn: ((success: boolean) => void) | null;
+  pauseTimer: ReturnType<typeof setTimeout> | null;
 };
 
 export const filesender = () => {
@@ -47,12 +49,14 @@ export const filesender = () => {
       cancel: false,
       paused: false,
       resumeFn: null,
+      finishFn: null,
+      pauseTimer: null,
     } as RequestState);
 
     console.log("SEND FILE:", { requestID, range });
 
     const rangeStart = range.startPos;
-    const endPos = range.endPos;
+    const endPos = Math.min(range.endPos, file.size);
     const rangeBytes = Math.max(endPos - rangeStart, 1);
 
     let start = rangeStart;
@@ -65,6 +69,7 @@ export const filesender = () => {
 
     let sendingQueue: Uint8Array[] = [];
     let queuePointer = 0;
+    let finished = false;
 
     const getRequest = () => requests.get(requestID) as RequestState | undefined;
     const isCancelled = () => getRequest()?.cancel === true;
@@ -110,18 +115,32 @@ export const filesender = () => {
       rtcSend(
         encodeChunkWithHeader({
           type: "file-end",
-          data: { requestID },
+          data: { requestID, bytesSent: endPos - rangeStart },
         })
       );
     };
 
+    const clearPauseTimer = () => {
+      const existing = getRequest();
+      if (existing?.pauseTimer) {
+        clearTimeout(existing.pauseTimer);
+      }
+    };
+
     const finish = (success: boolean) => {
+      if (finished) {
+        return;
+      }
+      finished = true;
       clearTimer();
+      clearPauseTimer();
       requests.set({
         requestID,
         cancel: getRequest()?.cancel ?? false,
         paused: false,
         resumeFn: null,
+        finishFn: null,
+        pauseTimer: null,
       } as RequestState);
 
       if (success) {
@@ -150,6 +169,8 @@ export const filesender = () => {
       cancel: false,
       paused: false,
       resumeFn: resumeTransfer,
+      finishFn: finish,
+      pauseTimer: null,
     } as RequestState);
 
     function readChunk() {
@@ -254,11 +275,18 @@ export const filesender = () => {
   function cancelUpload(requestID: number) {
     console.log("cancelUpload! request sent");
     const existing = requests.get(requestID) as RequestState | undefined;
+    if (existing?.finishFn) {
+      existing.finishFn(false);
+      return;
+    }
+
     requests.set({
       requestID,
       cancel: true,
       paused: existing?.paused ?? false,
       resumeFn: null,
+      finishFn: null,
+      pauseTimer: null,
     } as RequestState);
   }
 
@@ -268,11 +296,25 @@ export const filesender = () => {
       return;
     }
 
+    if (existing.pauseTimer) {
+      clearTimeout(existing.pauseTimer);
+    }
+
+    const pauseTimer = setTimeout(() => {
+      const current = requests.get(requestID) as RequestState | undefined;
+      if (current?.paused && !current.cancel) {
+        console.warn("pause watchdog resume", requestID);
+        resumeUpload(requestID);
+      }
+    }, 5000);
+
     requests.set({
       requestID,
       cancel: existing.cancel,
       paused: true,
       resumeFn: existing.resumeFn,
+      finishFn: existing.finishFn,
+      pauseTimer,
     } as RequestState);
   }
 
@@ -282,11 +324,17 @@ export const filesender = () => {
       return;
     }
 
+    if (existing.pauseTimer) {
+      clearTimeout(existing.pauseTimer);
+    }
+
     requests.set({
       requestID,
       cancel: existing.cancel,
       paused: false,
       resumeFn: existing.resumeFn,
+      finishFn: existing.finishFn,
+      pauseTimer: null,
     } as RequestState);
 
     existing.resumeFn?.();
@@ -300,6 +348,8 @@ export const filesender = () => {
         cancel: true,
         paused: item.paused,
         resumeFn: null,
+        finishFn: null,
+        pauseTimer: null,
       } as RequestState);
     });
   }

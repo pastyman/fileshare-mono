@@ -49,12 +49,7 @@ const Index = ({ onNavigate }: { onNavigate: any }) => {
       }
 
       const onMessageRecieved = (data: any) => {
-        console.log("message recieved", data)
-
-
-        const { header, chunk } =  decodeChunkWithHeader(data);
-
-        console.log("message header", header)
+        const { header } =  decodeChunkWithHeader(data);
 
         if (header.type === "fileInfo") {
           setFileInfo(header.data)

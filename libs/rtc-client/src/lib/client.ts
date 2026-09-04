@@ -13,7 +13,7 @@ export const client = (
 ) => {
 
   let connected = [0, 0, 0, 0];
-  let lastMessageFromPeer: any = null;
+  let lastActivity = Date.now();
   let THB: any = null;
 
   let channel = 0;
@@ -73,8 +73,7 @@ export const client = (
 
   //rtc message recieved coming back from other peer
   function onMessageRecievedProxy(data: string, rtcid: number) {
-    //update date
-    lastMessageFromPeer = Date.now();
+    lastActivity = Date.now();
 
     //check for who
     if (rtcid === 0) {
@@ -137,35 +136,19 @@ export const client = (
   }
 
   function send(message: ArrayBuffer) {
-    let bestIdx = -1;
-    let bestAmount = Infinity;
+    lastActivity = Date.now();
 
-    for (let i = 0; i < rtcs.length; i++) {
-      const idx = (channel + i) % rtcs.length;
-      const amount = rtcs[idx].bufferedAmount() ?? Infinity;
-
-      if (amount < bestAmount) {
-        bestAmount = amount;
-        bestIdx = idx;
-      }
-    }
-
-    if (bestIdx >= 0) {
-      channel = (bestIdx + 1) % rtcs.length;
-      rtcs[bestIdx].send(message);
-    }
+    // Must stay round-robin: the receiver reassembles channels in order 0→1→2→3.
+    // Sending to the least-loaded channel breaks that and stalls near EOF when
+    // remaining chunks pile up on the "wrong" channel.
+    const idx = channel;
+    channel = (channel + 1) % rtcs.length;
+    rtcs[idx].send(message);
   }
 
   function bufferedAmount() {
-    const amounts = rtcs
-      .map(rtcInstance => rtcInstance.bufferedAmount())
-      .filter((amount): amount is number => amount !== null);
-
-    if (amounts.length === 0) {
-      return null;
-    }
-
-    return Math.min(...amounts);
+    // Backpressure against the next channel we will send on.
+    return rtcs[channel].bufferedAmount();
   }
 
   //connection established - only fires back when both connected (this fires on both peers)
@@ -188,7 +171,7 @@ export const client = (
 
       //monitor connection health
       console.log("RUNNING CONNECTION HEALTH")
-      lastMessageFromPeer = Date.now() + 30000; //set 30 secs in future to give both chance
+      lastActivity = Date.now();
       THB = setTimeout(connectionHealth, 3000);
     }
   }
@@ -199,10 +182,10 @@ export const client = (
     //send ping
     send(encodeChunkWithHeader({ type: "ping" }));
 
-    console.log('SEND PING', lastMessageFromPeer);
+    console.log('SEND PING');
 
-    //check if message has been recieved in last 15 seconds
-    if (Date.now() - lastMessageFromPeer > 15000) {
+    // Allow long stretches of one-way transfer during large downloads.
+    if (Date.now() - lastActivity > 120000) {
       console.log('CONNECTION DEAD');
       disconnect();
       onConnectionClosed();
