@@ -73,6 +73,14 @@ const Index = ({ fileInfo, onNavigate }: {fileInfo: FileInfo, onNavigate: any })
           console.log('canceled!');
         }
 
+        if (header.type === "pause") {
+          fileSender.pauseUpload(header.data.requestID);
+        }
+
+        if (header.type === "resume") {
+          fileSender.resumeUpload(header.data.requestID);
+        }
+
         //console.log("onMessageRecieved", data)
       }
 

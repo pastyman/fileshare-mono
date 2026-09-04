@@ -6,18 +6,17 @@ export const swcomm = (downloadUpdateCallback: any, rtcObj: any) => {
   let swDataAccept = false;
   let broadcastToSw: any = null;
   let broadcastFromSw: any = null;
+  const pausedRequests = new Set<number>();
 
   function init() {
     broadcastToSw = new BroadcastChannel('channel-sfsw-tosw');
     broadcastFromSw = new BroadcastChannel('channel-sfsw-fromsw');
 
     try {
-      //register sw if not already there
       navigator.serviceWorker.getRegistrations().then(function (registrations) {
         console.log(registrations);
 
         if (registrations.length === 0) {
-          //service worker not already there - register
           navigator.serviceWorker.register('/swv24052025r1.js')
             .then(function (reg) {
               console.log('SERVICE WORKER READY!!!');
@@ -32,26 +31,28 @@ export const swcomm = (downloadUpdateCallback: any, rtcObj: any) => {
       console.log(exc);
     }
 
-    //listen to messages
     broadcastFromSw.onmessage = (event: MessageEvent<any>) => {
       swDataAccept = true;
 
-      const { header, chunk } =  decodeChunkWithHeader(event.data);
+      const { header } =  decodeChunkWithHeader(event.data);
 
-      //let msg = JSON.parse(event.data);
       if (header.type === "file-send") {
         console.log('rtc command msg from sw!', header);
-
-        //file request from service worker, forward to host via rtc
         rtcObj.send(encodeChunkWithHeader(header));
       }
       if (header.type === "progress") {
-        downloadUpdateCallback(header.percent);
+        downloadUpdateCallback(header.data.percent);
       }
       if (header.type === "cancel") {
         console.log('rtc command msg from sw!', header);
-
-        //file request from service worker, forward to host via rtc
+        rtcObj.send(encodeChunkWithHeader(header));
+      }
+      if (header.type === "pause") {
+        pausedRequests.add(header.data.requestID);
+        rtcObj.send(encodeChunkWithHeader(header));
+      }
+      if (header.type === "resume") {
+        pausedRequests.delete(header.data.requestID);
         rtcObj.send(encodeChunkWithHeader(header));
       }
     };
@@ -60,6 +61,7 @@ export const swcomm = (downloadUpdateCallback: any, rtcObj: any) => {
   function close() {
     broadcastToSw && broadcastToSw.close();
     broadcastFromSw && broadcastFromSw.close();
+    pausedRequests.clear();
 
     navigator.serviceWorker.getRegistrations().then(function (registrations) {
       for (let registration of registrations) {
@@ -70,6 +72,15 @@ export const swcomm = (downloadUpdateCallback: any, rtcObj: any) => {
 
   function saveChunk(binaryChunk: any) {
     try {
+      const { header } = decodeChunkWithHeader(binaryChunk);
+
+      if (
+        header.type === "file-send" &&
+        pausedRequests.has(header.data.requestID)
+      ) {
+        return;
+      }
+
       broadcastToSw.postMessage(binaryChunk);
     }
     catch (exc) {

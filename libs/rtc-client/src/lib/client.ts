@@ -27,6 +27,7 @@ export const client = (
   const rtc1 = rtc(configuration, onMessageRecievedProxy, connectionEstablishedCallbackProxy, onConnectionClosedProxy, onHandshakeMsgSendProxy, 1);
   const rtc2 = rtc(configuration, onMessageRecievedProxy, connectionEstablishedCallbackProxy, onConnectionClosedProxy, onHandshakeMsgSendProxy, 2);
   const rtc3 = rtc(configuration, onMessageRecievedProxy, connectionEstablishedCallbackProxy, onConnectionClosedProxy, onHandshakeMsgSendProxy, 3);
+  const rtcs = [rtc0, rtc1, rtc2, rtc3];
 
   //connect to other peer
   const connect = async (fuser: any, fuser2: any, polite: boolean) => {
@@ -136,43 +137,35 @@ export const client = (
   }
 
   function send(message: ArrayBuffer) {
-    //console.log('webrtcwrapper send message channel: ' + channel);
+    let bestIdx = -1;
+    let bestAmount = Infinity;
 
-    if (channel === 0) {
-      channel++;
-      rtc0.send(message);
+    for (let i = 0; i < rtcs.length; i++) {
+      const idx = (channel + i) % rtcs.length;
+      const amount = rtcs[idx].bufferedAmount() ?? Infinity;
+
+      if (amount < bestAmount) {
+        bestAmount = amount;
+        bestIdx = idx;
+      }
     }
-    else if (channel === 1) {
-      channel++;
-      rtc1.send(message);
-    }
-    else if (channel === 2) {
-      channel++;
-      rtc2.send(message);
-    }
-    else if (channel === 3) {
-      channel = 0;
-      rtc3.send(message);
+
+    if (bestIdx >= 0) {
+      channel = (bestIdx + 1) % rtcs.length;
+      rtcs[bestIdx].send(message);
     }
   }
 
   function bufferedAmount() {
-    //return next buffer to be used
-    var buf = null;
-    if (channel === 0) {
-      buf = rtc0.bufferedAmount();
-    }
-    else if (channel === 1) {
-      buf = rtc1.bufferedAmount();
-    }
-    else if (channel === 2) {
-      buf = rtc2.bufferedAmount();
-    }
-    else if (channel === 3) {
-      buf = rtc3.bufferedAmount();
+    const amounts = rtcs
+      .map(rtcInstance => rtcInstance.bufferedAmount())
+      .filter((amount): amount is number => amount !== null);
+
+    if (amounts.length === 0) {
+      return null;
     }
 
-    return buf;
+    return Math.min(...amounts);
   }
 
   //connection established - only fires back when both connected (this fires on both peers)
