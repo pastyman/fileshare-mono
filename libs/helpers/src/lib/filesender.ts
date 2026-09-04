@@ -4,6 +4,16 @@
 import hashtable from "alib-hashtable";
 import { encodeChunkWithHeader } from "rtc-client";
 
+const RTC_MAX_MESSAGE = 262_144;
+const HEADER_OVERHEAD = 256;
+const BASE_CHUNK_SIZE = RTC_MAX_MESSAGE - HEADER_OVERHEAD;
+const INITIAL_BIG_SLICE = 512_000;
+const MIN_BIG_SLICE = 64_000;
+const MAX_BIG_SLICE = 4_194_304;
+const BUFFER_MAX = 1_048_576; // 1MB on the next round-robin channel
+const LOW_BYTES_PER_SEC = 2_000_000;
+const HIGH_BYTES_PER_SEC = 8_000_000;
+
 function readAsArrayBufferAsync(blob: Blob): Promise<ArrayBuffer> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -13,159 +23,250 @@ function readAsArrayBufferAsync(blob: Blob): Promise<ArrayBuffer> {
   });
 }
 
+type RequestState = {
+  requestID: number;
+  cancel: boolean;
+  paused: boolean;
+  resumeFn: (() => void) | null;
+  finishFn: ((success: boolean) => void) | null;
+  pauseTimer: ReturnType<typeof setTimeout> | null;
+};
+
 export const filesender = () => {
-  const BASE_CHUNK_SIZE = 12_000; // small chunk for RTC sending
-  const INITIAL_BIG_SLICE = 512_000; // initial big slice (512KB)
-  const MIN_BIG_SLICE = 64_000; // minimum big slice (64KB)
-  const MAX_BIG_SLICE = 4_194_304; // maximum big slice (4MB)
-  const BUFFER_MAX = 16_000; // rtcBufferedAmount threshold
-  const LOW_SEND_RATE = 50; // below = slow sending
-  const HIGH_SEND_RATE = 150; // above = fast sending
-
   const requests = hashtable("requestID");
-
-  // Shared adaptive tuning state across all transfers
-  let tunedBigSliceSize = INITIAL_BIG_SLICE;
-  let tunedSendHistory: number[] = [];
 
   function sendFile(
     file: File,
     requestID: number,
     range: { startPos: number; endPos: number },
-    rtcSend: any,
-    rtcBufferedAmount: any,
-    uploadUpdateCallback: any,
-    uploadFinishedCallback: any
+    rtcSend: (message: ArrayBuffer) => void,
+    rtcBufferedAmount: () => number | null,
+    uploadUpdateCallback: (percent: number) => void,
+    uploadFinishedCallback: () => void
   ) {
-    requests.set({ requestID, cancel: false });
+    requests.set({
+      requestID,
+      cancel: false,
+      paused: false,
+      resumeFn: null,
+      finishFn: null,
+      pauseTimer: null,
+    } as RequestState);
 
     console.log("SEND FILE:", { requestID, range });
 
-    let start = range.startPos;
-    const endPos = range.endPos;
+    const rangeStart = range.startPos;
+    const endPos = Math.min(range.endPos, file.size);
+    const rangeBytes = Math.max(endPos - rangeStart, 1);
+
+    let start = rangeStart;
     let end = 0;
-
     let percentSent = -1;
-    let percentage = 0;
-    let THB: any = null;
+    let THB: ReturnType<typeof setTimeout> | null = null;
 
-    // Copy the tuned defaults
-    let bigSliceSize = tunedBigSliceSize;
-    let sendHistory: number[] = [...tunedSendHistory];
+    let bigSliceSize = INITIAL_BIG_SLICE;
+    let byteHistory: { t: number; bytes: number }[] = [];
 
     let sendingQueue: Uint8Array[] = [];
     let queuePointer = 0;
+    let finished = false;
 
-    const isCancelled = () => requests.get(requestID)?.cancel === true;
+    const getRequest = () => requests.get(requestID) as RequestState | undefined;
+    const isCancelled = () => getRequest()?.cancel === true;
+    const isPaused = () => getRequest()?.paused === true;
 
-    function recordSend() {
+    const clearTimer = () => {
+      if (THB !== null) {
+        clearTimeout(THB);
+        THB = null;
+      }
+    };
+
+    const schedule = (fn: () => void, delay = 10) => {
+      clearTimer();
+      THB = setTimeout(fn, delay);
+    };
+
+    const updateProgress = () => {
+      let percentage = Math.floor(((end - rangeStart) / rangeBytes) * 100);
+      if (percentage > 99) percentage = 99;
+
+      if (percentSent !== percentage) {
+        percentSent = percentage;
+        uploadUpdateCallback(percentSent);
+      }
+    };
+
+    const recordSlice = (bytesSent: number) => {
       const now = performance.now();
-      sendHistory.push(now);
-      sendHistory = sendHistory.filter(t => now - t < 2000); // Keep last 2 seconds
+      byteHistory.push({ t: now, bytes: bytesSent });
+      byteHistory = byteHistory.filter(entry => now - entry.t < 2000);
 
-      const sendsPerSec = sendHistory.length / 2;
+      const bytesPerSec = byteHistory.reduce((sum, entry) => sum + entry.bytes, 0) / 2;
 
-      // Adjust bigSliceSize adaptively
-      if (sendsPerSec < LOW_SEND_RATE) {
-        bigSliceSize = Math.min(bigSliceSize * 1.5, MAX_BIG_SLICE);
-      } else if (sendsPerSec > HIGH_SEND_RATE) {
-        bigSliceSize = Math.max(bigSliceSize * 0.75, MIN_BIG_SLICE);
+      if (bytesPerSec < LOW_BYTES_PER_SEC) {
+        bigSliceSize = Math.min(Math.floor(bigSliceSize * 1.5), MAX_BIG_SLICE);
+      } else if (bytesPerSec > HIGH_BYTES_PER_SEC) {
+        bigSliceSize = Math.max(Math.floor(bigSliceSize * 0.75), MIN_BIG_SLICE);
       }
+    };
 
-      // Update tuned defaults for future requests
-      tunedBigSliceSize = bigSliceSize;
-      tunedSendHistory = [...sendHistory];
-    }
-
-    function readChunk() {
-      if (rtcBufferedAmount() !== null && rtcBufferedAmount() < BUFFER_MAX && !isCancelled()) {
-        if (start + bigSliceSize < endPos) {
-          end = start + bigSliceSize;
-        } else {
-          end = endPos;
-        }
-
-        percentage = Math.floor((end / endPos) * 100);
-        if (percentage > 99) percentage = 99;
-
-        if (percentSent !== percentage) {
-          percentSent = percentage;
-          uploadUpdateCallback(percentSent);
-        }
-
-        readAsArrayBufferAsync(file.slice(start, end))
-          .then(arrayBuffer => {
-            let offset = 0;
-            const totalLength = arrayBuffer.byteLength;
-
-            while (offset < totalLength) {
-              const sliceEnd = Math.min(offset + BASE_CHUNK_SIZE, totalLength);
-              const chunk = arrayBuffer.slice(offset, sliceEnd);
-              sendingQueue.push(new Uint8Array(chunk));
-              offset = sliceEnd;
-            }
-
-            start = end;
-            sendBinaryChunk();
-          })
-          .catch(err => {
-            console.error("Failed to read chunk:", err);
-            finish();
-          });
-      } else {
-        if (!isCancelled() && rtcBufferedAmount() !== null) {
-          THB = setTimeout(readChunk, 10);
-        } else {
-          uploadFinishedCallback();
-        }
-      }
-    }
-
-    function sendBinaryChunk() {
-      while (queuePointer < sendingQueue.length && rtcBufferedAmount() < BUFFER_MAX && !isCancelled()) {
-        const chunk = sendingQueue[queuePointer++];
-
-        if (chunk) {
-          const chunkBuffer = chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength);
-          rtcSend(
-            encodeChunkWithHeader(
-              {
-                type: "file-send",
-                data: { requestID }
-              },
-              new Uint8Array(chunkBuffer).buffer
-            )
-          );
-          recordSend();
-        }
-      }
-
-      if (queuePointer >= sendingQueue.length && start < endPos) {
-        // Finished current slice, read next
-        sendingQueue = [];
-        queuePointer = 0;
-        THB = setTimeout(readChunk, 0);
-      } else if (start >= endPos && queuePointer >= sendingQueue.length) {
-        // Finished everything
-        finish();
-      } else {
-        // Waiting for RTC buffer to clear
-        THB = setTimeout(sendBinaryChunk, 10);
-      }
-    }
-
-    function finish() {
-      uploadUpdateCallback(100);
-      uploadFinishedCallback();
-
+    const sendFileEnd = () => {
       rtcSend(
         encodeChunkWithHeader({
           type: "file-end",
-          data: { requestID }
+          data: { requestID, bytesSent: endPos - rangeStart },
         })
       );
+    };
 
-      console.log("EXIT!");
+    const clearPauseTimer = () => {
+      const existing = getRequest();
+      if (existing?.pauseTimer) {
+        clearTimeout(existing.pauseTimer);
+      }
+    };
+
+    const finish = (success: boolean) => {
+      if (finished) {
+        return;
+      }
+      finished = true;
+      clearTimer();
+      clearPauseTimer();
+      requests.set({
+        requestID,
+        cancel: getRequest()?.cancel ?? false,
+        paused: false,
+        resumeFn: null,
+        finishFn: null,
+        pauseTimer: null,
+      } as RequestState);
+
+      if (success) {
+        uploadUpdateCallback(100);
+      }
+
+      uploadFinishedCallback();
+      sendFileEnd();
+      console.log("EXIT!", { requestID, success });
+    };
+
+    const resumeTransfer = () => {
+      if (isCancelled() || isPaused()) {
+        return;
+      }
+
+      if (queuePointer < sendingQueue.length) {
+        sendBinaryChunk();
+      } else if (start < endPos) {
+        readChunk();
+      }
+    };
+
+    requests.set({
+      requestID,
+      cancel: false,
+      paused: false,
+      resumeFn: resumeTransfer,
+      finishFn: finish,
+      pauseTimer: null,
+    } as RequestState);
+
+    function readChunk() {
+      if (isCancelled()) {
+        finish(false);
+        return;
+      }
+
+      if (isPaused()) {
+        schedule(readChunk, 25);
+        return;
+      }
+
+      const buffered = rtcBufferedAmount();
+      if (buffered === null || buffered >= BUFFER_MAX) {
+        schedule(readChunk, 10);
+        return;
+      }
+
+      if (start + bigSliceSize < endPos) {
+        end = start + bigSliceSize;
+      } else {
+        end = endPos;
+      }
+
+      updateProgress();
+
+      readAsArrayBufferAsync(file.slice(start, end))
+        .then(arrayBuffer => {
+          if (isCancelled()) {
+            finish(false);
+            return;
+          }
+
+          let offset = 0;
+          const totalLength = arrayBuffer.byteLength;
+
+          while (offset < totalLength) {
+            const sliceEnd = Math.min(offset + BASE_CHUNK_SIZE, totalLength);
+            sendingQueue.push(new Uint8Array(arrayBuffer, offset, sliceEnd - offset));
+            offset = sliceEnd;
+          }
+
+          recordSlice(totalLength);
+          start = end;
+          sendBinaryChunk();
+        })
+        .catch(err => {
+          console.error("Failed to read chunk:", err);
+          finish(false);
+        });
+    }
+
+    function sendBinaryChunk() {
+      if (isCancelled()) {
+        finish(false);
+        return;
+      }
+
+      if (isPaused()) {
+        schedule(sendBinaryChunk, 25);
+        return;
+      }
+
+      while (queuePointer < sendingQueue.length && !isCancelled() && !isPaused()) {
+        const buffered = rtcBufferedAmount();
+        if (buffered === null || buffered >= BUFFER_MAX) {
+          break;
+        }
+
+        const chunk = sendingQueue[queuePointer++];
+        rtcSend(
+          encodeChunkWithHeader(
+            {
+              type: "file-send",
+              data: { requestID },
+            },
+            chunk
+          )
+        );
+      }
+
+      if (isCancelled()) {
+        finish(false);
+        return;
+      }
+
+      if (queuePointer >= sendingQueue.length && start < endPos) {
+        sendingQueue = [];
+        queuePointer = 0;
+        schedule(readChunk, 0);
+      } else if (start >= endPos && queuePointer >= sendingQueue.length) {
+        finish(true);
+      } else {
+        schedule(sendBinaryChunk, 10);
+      }
     }
 
     readChunk();
@@ -173,19 +274,91 @@ export const filesender = () => {
 
   function cancelUpload(requestID: number) {
     console.log("cancelUpload! request sent");
-    requests.set({ requestID, cancel: true });
+    const existing = requests.get(requestID) as RequestState | undefined;
+    if (existing?.finishFn) {
+      existing.finishFn(false);
+      return;
+    }
+
+    requests.set({
+      requestID,
+      cancel: true,
+      paused: existing?.paused ?? false,
+      resumeFn: null,
+      finishFn: null,
+      pauseTimer: null,
+    } as RequestState);
+  }
+
+  function pauseUpload(requestID: number) {
+    const existing = requests.get(requestID) as RequestState | undefined;
+    if (!existing) {
+      return;
+    }
+
+    if (existing.pauseTimer) {
+      clearTimeout(existing.pauseTimer);
+    }
+
+    const pauseTimer = setTimeout(() => {
+      const current = requests.get(requestID) as RequestState | undefined;
+      if (current?.paused && !current.cancel) {
+        console.warn("pause watchdog resume", requestID);
+        resumeUpload(requestID);
+      }
+    }, 5000);
+
+    requests.set({
+      requestID,
+      cancel: existing.cancel,
+      paused: true,
+      resumeFn: existing.resumeFn,
+      finishFn: existing.finishFn,
+      pauseTimer,
+    } as RequestState);
+  }
+
+  function resumeUpload(requestID: number) {
+    const existing = requests.get(requestID) as RequestState | undefined;
+    if (!existing?.paused) {
+      return;
+    }
+
+    if (existing.pauseTimer) {
+      clearTimeout(existing.pauseTimer);
+    }
+
+    requests.set({
+      requestID,
+      cancel: existing.cancel,
+      paused: false,
+      resumeFn: existing.resumeFn,
+      finishFn: existing.finishFn,
+      pauseTimer: null,
+    } as RequestState);
+
+    existing.resumeFn?.();
   }
 
   function cancelAll() {
     const allRequests = requests.getCollection();
-    allRequests.forEach((item: any) => {
-      requests.set({ requestID: item.requestID, cancel: true });
+    allRequests.forEach((item: RequestState) => {
+      requests.set({
+        requestID: item.requestID,
+        cancel: true,
+        paused: item.paused,
+        resumeFn: null,
+        finishFn: null,
+        pauseTimer: null,
+      } as RequestState);
     });
   }
 
   return {
     sendFile,
     cancelUpload,
-    cancelAll
+    pauseUpload,
+    resumeUpload,
+    cancelAll,
   };
 };

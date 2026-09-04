@@ -41,7 +41,13 @@ const Index = ({ fileInfo, onNavigate }: {fileInfo: FileInfo, onNavigate: any })
 
         setStatus("connected")
 
-        const payload = encodeChunkWithHeader({ type: "fileInfo", data: fileInfo })
+        const fileInput = document.getElementById('home-files') as HTMLInputElement | null;
+        const actualFileInfo = fileInfo.map((file, index) => ({
+          name: file.name,
+          size: fileInput?.files?.[index]?.size ?? file.size,
+        }));
+
+        const payload = encodeChunkWithHeader({ type: "fileInfo", data: actualFileInfo })
 
 
         console.log("sending", payload)
@@ -63,7 +69,16 @@ const Index = ({ fileInfo, onNavigate }: {fileInfo: FileInfo, onNavigate: any })
 
           //send file
           if (fileHandle) {
-            fileSender.sendFile(fileHandle, header.data.requestID, header.data.range, rtcClient.send, rtcClient.bufferedAmount, () => { }, () => { });
+            const actualEndPos = Math.min(header.data.range.endPos, fileHandle.size);
+            fileSender.sendFile(
+              fileHandle,
+              header.data.requestID,
+              { startPos: header.data.range.startPos, endPos: actualEndPos },
+              rtcClient.send,
+              rtcClient.bufferedAmount,
+              () => { },
+              () => { }
+            );
           }
         }
 
@@ -71,6 +86,14 @@ const Index = ({ fileInfo, onNavigate }: {fileInfo: FileInfo, onNavigate: any })
           //cancel current upload
           fileSender.cancelUpload(header.data.requestID);
           console.log('canceled!');
+        }
+
+        if (header.type === "pause") {
+          fileSender.pauseUpload(header.data.requestID);
+        }
+
+        if (header.type === "resume") {
+          fileSender.resumeUpload(header.data.requestID);
         }
 
         //console.log("onMessageRecieved", data)

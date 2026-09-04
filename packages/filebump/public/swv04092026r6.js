@@ -50,17 +50,16 @@ var mimes = [
 
 ];
 
-//stop console log
-console.log = function (message) { };
+// Keep console output available in the service worker devtools panel.
 
 const arrRequests = [];
 let nextRequestID = 0;
 //const RANGE_SIZE = 1048576; //1 MB
 const RANGE_SIZE = 8388608; //8 MB
 //const RANGE_SIZE = 67108864; //64 MB
-const TIMEOUT = 30000 //30 secs
-const MAX_BUFFERED_BYTES = 16777216; // 16 MB per active request
-const LOW_WATER_BYTES = 4194304; // 4 MB
+const TIMEOUT = 120000 // 120 secs for slow disk flush near end of large files
+const MAX_BUFFERED_BYTES = 67108864; // 64 MB - larger buffer reduces end-of-file stall
+const LOW_WATER_BYTES = 16777216; // 16 MB
 const requestMeta = {};
 const broadcastToSw = new BroadcastChannel('channel-sfsw-tosw');
 const broadcastFromSw = new BroadcastChannel('channel-sfsw-fromsw');
@@ -97,13 +96,47 @@ const encodeChunkWithHeader = (header, binaryChunk) => {
   return buffer;
 };
 
-function createRequestMeta(requestID) {
+function createRequestMeta(requestID, expectedBytes) {
   requestMeta[requestID] = {
     bufferedBytes: 0,
     pendingIncoming: [],
     senderPaused: false,
-    wakePush: null,
+    wakePull: null,
+    senderByteTotal: 0,
+    expectedBytes: expectedBytes,
+    deliveredBytes: 0,
+    receivedBytes: 0,
+    eofSeen: false,
+    lastResumeAttempt: 0,
   };
+}
+
+function notifyWaiter(requestID) {
+  const meta = getRequestMeta(requestID);
+  if (meta && meta.wakePull) {
+    const wake = meta.wakePull;
+    meta.wakePull = null;
+    wake();
+  }
+}
+
+function maybeResumeSender(requestID) {
+  const meta = getRequestMeta(requestID);
+  if (!meta || !meta.senderPaused) {
+    return;
+  }
+
+  const backlogBytes = meta.bufferedBytes + getPendingByteLength(meta);
+  const now = Date.now();
+
+  if (backlogBytes <= LOW_WATER_BYTES) {
+    meta.senderPaused = false;
+    meta.lastResumeAttempt = now;
+    sendMessageToClient({
+      type: "resume",
+      data: { requestID },
+    });
+  }
 }
 
 function getRequestMeta(requestID) {
@@ -126,6 +159,20 @@ function getQueuedByteLength(chunk) {
   return 0;
 }
 
+function resumeSender(requestID) {
+  const meta = getRequestMeta(requestID);
+  if (!meta || !meta.senderPaused) {
+    return;
+  }
+
+  meta.senderPaused = false;
+  meta.lastResumeAttempt = Date.now();
+  sendMessageToClient({
+    type: "resume",
+    data: { requestID },
+  });
+}
+
 function enqueueIncomingChunk(requestID, chunk) {
   const meta = getRequestMeta(requestID);
   if (!meta || arrRequests[requestID] === undefined) {
@@ -134,12 +181,34 @@ function enqueueIncomingChunk(requestID, chunk) {
 
   const chunkBytes = getQueuedByteLength(chunk);
 
+  // Keep EOF behind any buffered data still waiting to drain.
+  if (chunkBytes === 0) {
+    meta.eofSeen = true;
+    meta.pendingIncoming.push(chunk);
+    drainPendingIncoming(requestID);
+    resumeSender(requestID);
+    notifyWaiter(requestID);
+    return;
+  }
+
+  meta.receivedBytes += chunkBytes;
+
+  // Sender is done — buffer locally without pausing RTC again.
+  if (meta.eofSeen) {
+    if (meta.bufferedBytes + chunkBytes <= MAX_BUFFERED_BYTES) {
+      arrRequests[requestID].push(chunk);
+      meta.bufferedBytes += chunkBytes;
+    } else {
+      meta.pendingIncoming.push(chunk);
+    }
+    notifyWaiter(requestID);
+    return;
+  }
+
   if (meta.bufferedBytes + chunkBytes <= MAX_BUFFERED_BYTES) {
     arrRequests[requestID].push(chunk);
     meta.bufferedBytes += chunkBytes;
-    if (meta.wakePush) {
-      meta.wakePush();
-    }
+    notifyWaiter(requestID);
     return;
   }
 
@@ -152,6 +221,33 @@ function enqueueIncomingChunk(requestID, chunk) {
       data: { requestID },
     });
   }
+}
+
+function getPendingByteLength(meta) {
+  var total = 0;
+
+  for (var i = 0; i < meta.pendingIncoming.length; i++) {
+    total += getQueuedByteLength(meta.pendingIncoming[i]);
+  }
+
+  return total;
+}
+
+function isTransferComplete(requestID, meta) {
+  const targetBytes = meta.senderByteTotal || meta.receivedBytes;
+  return (
+    meta.eofSeen &&
+    meta.deliveredBytes >= targetBytes &&
+    !hasBufferedData(requestID)
+  );
+}
+
+function hasBufferedData(requestID) {
+  const meta = getRequestMeta(requestID);
+  return (
+    arrRequests[requestID].length > 0 ||
+    (meta && meta.pendingIncoming.length > 0)
+  );
 }
 
 function drainPendingIncoming(requestID) {
@@ -171,18 +267,15 @@ function drainPendingIncoming(requestID) {
     meta.pendingIncoming.shift();
     arrRequests[requestID].push(nextChunk);
     meta.bufferedBytes += chunkBytes;
+    notifyWaiter(requestID);
   }
 
   if (
     meta.senderPaused &&
-    meta.bufferedBytes <= LOW_WATER_BYTES &&
-    meta.pendingIncoming.length === 0
+    !meta.eofSeen &&
+    meta.bufferedBytes + getPendingByteLength(meta) <= LOW_WATER_BYTES
   ) {
-    meta.senderPaused = false;
-    sendMessageToClient({
-      type: "resume",
-      data: { requestID },
-    });
+    resumeSender(requestID);
   }
 }
 
@@ -193,7 +286,29 @@ function dequeueChunk(requestID, chunk) {
   }
 
   meta.bufferedBytes = Math.max(0, meta.bufferedBytes - getQueuedByteLength(chunk));
-  drainPendingIncoming(requestID);
+
+  // Drain pending into the active queue without waking pull re-entrantly
+  // (caller is already inside tryDeliver).
+  while (meta.pendingIncoming.length > 0) {
+    const nextChunk = meta.pendingIncoming[0];
+    const chunkBytes = getQueuedByteLength(nextChunk);
+
+    if (meta.bufferedBytes + chunkBytes > MAX_BUFFERED_BYTES) {
+      break;
+    }
+
+    meta.pendingIncoming.shift();
+    arrRequests[requestID].push(nextChunk);
+    meta.bufferedBytes += chunkBytes;
+  }
+
+  if (
+    meta.senderPaused &&
+    !meta.eofSeen &&
+    meta.bufferedBytes + getPendingByteLength(meta) <= LOW_WATER_BYTES
+  ) {
+    resumeSender(requestID);
+  }
 }
 
 //listen to messages
@@ -204,8 +319,11 @@ broadcastToSw.onmessage = (event) => {
   const requestID = parseInt(header.data.requestID, 10);
 
   if (header.type === "file-end") {
-      console.log('sw recieved data RequestID', requestID)
       try {
+        const meta = getRequestMeta(requestID);
+        if (meta && header.data.bytesSent !== undefined) {
+          meta.senderByteTotal = header.data.bytesSent;
+        }
         enqueueIncomingChunk(requestID, new ArrayBuffer(0));
       }
       catch (exc) {
@@ -214,7 +332,6 @@ broadcastToSw.onmessage = (event) => {
     }
 
   if (header.type === "file-send") {
-    console.log('sw recieved data RequestID', requestID)
     try {
       enqueueIncomingChunk(requestID, chunk);
     }
@@ -258,7 +375,6 @@ self.addEventListener('fetch', function (event) {
     var lastDataRecievedTime = Date.now();
     const requestID = nextRequestID++;
     arrRequests[requestID] = [];
-    createRequestMeta(requestID);
     console.log('Handling fetch event for', url, requestID);
 
     //file name example
@@ -296,9 +412,10 @@ self.addEventListener('fetch', function (event) {
     var percentage = 0;
     var percentSent = -1;
     var pos = startPos;
-    const rangeSpan = Math.max(endPos - startPos, 1);
+    const rangeSpan = Math.max(endPos - startPos + 1, 1);
+    const expectedBytes = rangeSpan;
 
-    //temp log
+    createRequestMeta(requestID, expectedBytes);
     console.log({
       type: "file-send",
       data: {
@@ -334,91 +451,162 @@ self.addEventListener('fetch', function (event) {
 
     sendMessageToClient({ type: "progress", data: { percent: 0 } });
 
+    function closeStream(controller, success) {
+      if (isFinished || isError) {
+        return;
+      }
+
+      if (success) {
+        isFinished = true;
+      } else {
+        isError = true;
+      }
+
+      try {
+        controller.close();
+        console.log('sw STREAM CLOSED!', { requestID, success });
+      }
+      catch (exc) {
+        console.log('controller.close error', exc);
+      }
+
+      if (isError) {
+        sendMessageToClient({
+          type: "cancel",
+          data: { requestID },
+        });
+        console.log('sw isError!', requestID);
+      } else {
+        sendMessageToClient({ type: "progress", data: { percent: 100 } });
+      }
+
+      arrRequests[requestID] = undefined;
+      clearRequestMeta(requestID);
+    }
+
+    function tryDeliver(controller) {
+      const meta = getRequestMeta(requestID);
+      if (!meta || isFinished || isError) {
+        return Promise.resolve(false);
+      }
+
+      drainPendingIncoming(requestID);
+      if (!meta.eofSeen) {
+        maybeResumeSender(requestID);
+      }
+
+      var targetBytes = meta.senderByteTotal || meta.expectedBytes;
+      var deliveredCount = 0;
+
+      while (arrRequests[requestID].length > 0) {
+        if (
+          controller.desiredSize !== null &&
+          controller.desiredSize <= 0 &&
+          deliveredCount > 0
+        ) {
+          break;
+        }
+
+        var binaryData = arrRequests[requestID].shift();
+        var binaryDataLength = binaryData.byteLength;
+
+        dequeueChunk(requestID, binaryData);
+
+        if (binaryDataLength > 0) {
+          meta.deliveredBytes += binaryDataLength;
+          pos = pos + binaryDataLength;
+          lastDataRecievedTime = Date.now();
+          deliveredCount += 1;
+
+          percentage = (((meta.deliveredBytes) / targetBytes) * 100).toFixed();
+          if (percentSent !== percentage) {
+            percentSent = percentage;
+            sendMessageToClient({ type: "progress", data: { percent: percentSent } });
+          }
+
+          controller.enqueue(binaryData);
+
+          if (isTransferComplete(requestID, meta)) {
+            closeStream(controller, true);
+            return Promise.resolve(true);
+          }
+          continue;
+        }
+
+        meta.eofSeen = true;
+
+        if (isTransferComplete(requestID, meta)) {
+          closeStream(controller, true);
+          return Promise.resolve(true);
+        }
+
+        meta.pendingIncoming.push(binaryData);
+        break;
+      }
+
+      if (isTransferComplete(requestID, meta)) {
+        closeStream(controller, true);
+        return Promise.resolve(true);
+      }
+
+      if (deliveredCount > 0) {
+        return Promise.resolve(true);
+      }
+
+      if (
+        !hasBufferedData(requestID) &&
+        !meta.eofSeen &&
+        (Date.now() - lastDataRecievedTime) > TIMEOUT
+      ) {
+        console.log('sw timeout waiting for data', requestID, meta.deliveredBytes, meta.receivedBytes, meta.expectedBytes);
+        closeStream(controller, false);
+        return Promise.resolve(true);
+      }
+
+      return new Promise(function(resolve) {
+        var pollDelay = meta.eofSeen ? 0 : 250;
+        var pollTimer = setTimeout(function() {
+          if (meta.wakePull) {
+            meta.wakePull = null;
+          }
+          tryDeliver(controller).then(function(done) {
+            resolve(done);
+          });
+        }, pollDelay);
+
+        meta.wakePull = function() {
+          clearTimeout(pollTimer);
+          meta.wakePull = null;
+          tryDeliver(controller).then(function(done) {
+            resolve(done);
+          });
+        };
+      });
+    }
+
     var stream = new ReadableStream({
-      start(controller) {
-        const meta = getRequestMeta(requestID);
-
-        function push() {
-          while (arrRequests[requestID] !== undefined && arrRequests[requestID].length > 0 && isFinished === false && isError === false) {
-            var binaryData = arrRequests[requestID].shift();
-            var binaryDataLength = binaryData.byteLength;
-
-            dequeueChunk(requestID, binaryData);
-
-            if (binaryDataLength > 0) {
-              pos = pos + binaryDataLength;
-              lastDataRecievedTime = Date.now();
-
-              percentage = (((pos - startPos) / rangeSpan) * 100).toFixed();
-              if (percentSent !== percentage) {
-                percentSent = percentage;
-                sendMessageToClient({ type: "progress", data: { percent: percentSent } });
-              }
-
-              try {
-                controller.enqueue(binaryData);
-              }
-              catch (exc) {
-                console.log('controller.enqueue error', exc);
-                isError = true;
-              }
-            }
-            else {
-              console.log('finished CALLED');
-              isFinished = true;
-            }
-          }
-
-          if ((Date.now() - lastDataRecievedTime) > TIMEOUT) {
-            isError = true;
-          }
-
-          if (isFinished || isError) {
-            try {
-              controller.close();
-              console.log('sw STREAM CLOSED!');
-            }
-            catch (exc) {
-              console.log('controller.close error', exc)
-            }
-
-            if (isError) {
-              sendMessageToClient({
-                type: "cancel",
-                data: {
-                  requestID,
-                }
-              });
-
-              console.log('sw isError!');
-            } else {
-              sendMessageToClient({ type: "progress", data: { percent: 100 } });
-            }
-
-            arrRequests[requestID] = undefined;
-            clearRequestMeta(requestID);
-            if (meta) {
-              meta.wakePush = null;
-            }
-          } else if (arrRequests[requestID].length === 0) {
-            setTimeout(push, 250);
-          }
-        }
-
-        if (meta) {
-          meta.wakePush = push;
-        }
-
-        push();
+      pull: function(controller) {
+        return tryDeliver(controller);
+      },
+      cancel: function() {
+        isError = true;
+        arrRequests[requestID] = undefined;
+        clearRequestMeta(requestID);
+        sendMessageToClient({
+          type: "cancel",
+          data: { requestID },
+        });
       }
     });
 
-    //response
+    //response - Content-Length must match the bytes we will stream
+    var contentLength = isRangeRequest ? ((endPos - startPos) + 1) : fileSize;
     var init = {
       headers: [
-        ['Content-Type', getMime(fileName) + '; charset=utf-8'],
+        ['Accept-Ranges', 'bytes'],
+        ['Content-Type', getMime(fileName)],
         ['Content-Disposition', 'attachment; filename="' + fileName + '"'],
-        ['Content-Length', fileSize]
+        ['Content-Length', contentLength],
       ]
     };
 
@@ -428,8 +616,8 @@ self.addEventListener('fetch', function (event) {
         statusText: 'Partial Content',
         headers: [
           ['Accept-Ranges', 'bytes'],
-          ['Content-Length', ((endPos - startPos) + 1)],
-          ['Content-Type', getMime(fileName) + '; charset=utf-8'],
+          ['Content-Length', contentLength],
+          ['Content-Type', getMime(fileName)],
           ['Content-Range', 'bytes ' + startPos + '-' + endPos + '/' + fileSize]]
       }
     }

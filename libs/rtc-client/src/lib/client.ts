@@ -13,7 +13,7 @@ export const client = (
 ) => {
 
   let connected = [0, 0, 0, 0];
-  let lastMessageFromPeer: any = null;
+  let lastActivity = Date.now();
   let THB: any = null;
 
   let channel = 0;
@@ -27,6 +27,7 @@ export const client = (
   const rtc1 = rtc(configuration, onMessageRecievedProxy, connectionEstablishedCallbackProxy, onConnectionClosedProxy, onHandshakeMsgSendProxy, 1);
   const rtc2 = rtc(configuration, onMessageRecievedProxy, connectionEstablishedCallbackProxy, onConnectionClosedProxy, onHandshakeMsgSendProxy, 2);
   const rtc3 = rtc(configuration, onMessageRecievedProxy, connectionEstablishedCallbackProxy, onConnectionClosedProxy, onHandshakeMsgSendProxy, 3);
+  const rtcs = [rtc0, rtc1, rtc2, rtc3];
 
   //connect to other peer
   const connect = async (fuser: any, fuser2: any, polite: boolean) => {
@@ -72,8 +73,7 @@ export const client = (
 
   //rtc message recieved coming back from other peer
   function onMessageRecievedProxy(data: string, rtcid: number) {
-    //update date
-    lastMessageFromPeer = Date.now();
+    lastActivity = Date.now();
 
     //check for who
     if (rtcid === 0) {
@@ -136,43 +136,19 @@ export const client = (
   }
 
   function send(message: ArrayBuffer) {
-    //console.log('webrtcwrapper send message channel: ' + channel);
+    lastActivity = Date.now();
 
-    if (channel === 0) {
-      channel++;
-      rtc0.send(message);
-    }
-    else if (channel === 1) {
-      channel++;
-      rtc1.send(message);
-    }
-    else if (channel === 2) {
-      channel++;
-      rtc2.send(message);
-    }
-    else if (channel === 3) {
-      channel = 0;
-      rtc3.send(message);
-    }
+    // Must stay round-robin: the receiver reassembles channels in order 0→1→2→3.
+    // Sending to the least-loaded channel breaks that and stalls near EOF when
+    // remaining chunks pile up on the "wrong" channel.
+    const idx = channel;
+    channel = (channel + 1) % rtcs.length;
+    rtcs[idx].send(message);
   }
 
   function bufferedAmount() {
-    //return next buffer to be used
-    var buf = null;
-    if (channel === 0) {
-      buf = rtc0.bufferedAmount();
-    }
-    else if (channel === 1) {
-      buf = rtc1.bufferedAmount();
-    }
-    else if (channel === 2) {
-      buf = rtc2.bufferedAmount();
-    }
-    else if (channel === 3) {
-      buf = rtc3.bufferedAmount();
-    }
-
-    return buf;
+    // Backpressure against the next channel we will send on.
+    return rtcs[channel].bufferedAmount();
   }
 
   //connection established - only fires back when both connected (this fires on both peers)
@@ -195,7 +171,7 @@ export const client = (
 
       //monitor connection health
       console.log("RUNNING CONNECTION HEALTH")
-      lastMessageFromPeer = Date.now() + 30000; //set 30 secs in future to give both chance
+      lastActivity = Date.now();
       THB = setTimeout(connectionHealth, 3000);
     }
   }
@@ -206,10 +182,10 @@ export const client = (
     //send ping
     send(encodeChunkWithHeader({ type: "ping" }));
 
-    console.log('SEND PING', lastMessageFromPeer);
+    console.log('SEND PING');
 
-    //check if message has been recieved in last 15 seconds
-    if (Date.now() - lastMessageFromPeer > 15000) {
+    // Allow long stretches of one-way transfer during large downloads.
+    if (Date.now() - lastActivity > 120000) {
       console.log('CONNECTION DEAD');
       disconnect();
       onConnectionClosed();
