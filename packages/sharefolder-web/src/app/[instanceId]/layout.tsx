@@ -1,14 +1,5 @@
 import { ReactNode } from 'react';
 
-interface InstanceLayoutProps {
-  children: ReactNode;
-}
-
-export default function InstanceLayout({ children }: InstanceLayoutProps) {
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Instance-level navigation could go here */}
-      {children}
-    </div>
-  );
+export default function InstanceLayout({ children }: { children: ReactNode }) {
+  return <div className="min-h-screen pt-4">{children}</div>;
 }

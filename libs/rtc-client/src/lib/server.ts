@@ -28,13 +28,24 @@ const axiosInstance = axios.create({
   },
 })
 
-export const serverSendRecieve = (clientId: string, peerId: string, onMessageRecieved: (from: string, to: string, data: object, rtcid: number) => void, onTimeout: () => void) => {
+const apiUrl = (path: string, apiBase = "") => {
+  const base = apiBase.replace(/\/$/, "")
+  return `${base}${path}`
+}
+
+export const serverSendRecieve = (
+  clientId: string,
+  peerId: string,
+  onMessageRecieved: (from: string, to: string, data: object, rtcid: number) => void,
+  onTimeout: () => void,
+  apiBase = ""
+) => {
   let THB: any = null;
   let closed = false;
   let pollStart = Date.now();
 
   const pollServer = async () => {
-    const response = await axiosInstance.post("/api/recieve", { from: peerId, to: clientId })
+    const response = await axiosInstance.post(apiUrl("/api/recieve", apiBase), { from: peerId, to: clientId })
     if (response.data) {
       response.data.forEach((message: Messaging) => {
         onMessageRecieved(message.from, message.to, message.data, parseInt(message.rtcid))
@@ -53,7 +64,7 @@ export const serverSendRecieve = (clientId: string, peerId: string, onMessageRec
   THB = setTimeout(pollServer, 500);
 
   const send = (order: number, from: string, to: string, data: object, rtcid: number) => {
-    axiosInstance.post(`/api/send`, {
+    axiosInstance.post(apiUrl("/api/send", apiBase), {
       order,
       from,
       to,
@@ -66,7 +77,7 @@ export const serverSendRecieve = (clientId: string, peerId: string, onMessageRec
     closed = true;
     clearTimeout(THB);
 
-    axiosInstance.post(`/api/clean`, {
+    axiosInstance.post(apiUrl("/api/clean", apiBase), {
       from: clientId,
       to: peerId
     })
@@ -78,14 +89,14 @@ export const serverSendRecieve = (clientId: string, peerId: string, onMessageRec
   }
 }
 
-export const serverConnectSend = (onPeerId: (peerId: string | null) => void, onSecret: (secret: string | null) => void, onTimeout: () => void) => {
+export const serverConnectSend = (onPeerId: (peerId: string | null) => void, onSecret: (secret: string | null) => void, onTimeout: () => void, apiBase = "") => {
   let THB: any = null;
   let secret: string = '';
   let closed = false;
   let pollStart = Date.now();
 
   const pollServer = async () => {
-    const response = await axiosInstance.get(`/api/connectSendPoll?secret=${secret}`)
+    const response = await axiosInstance.get(apiUrl(`/api/connectSendPoll?secret=${secret}`, apiBase))
     if (response.status === 200 && response.data.peerId) {
       //success, job finished
       onPeerId(response.data.peerId)
@@ -107,7 +118,7 @@ export const serverConnectSend = (onPeerId: (peerId: string | null) => void, onS
   }
 
   const connectSend = async (clientId: string) => {
-    const response = await axiosInstance.post(`/api/connectSend`, {
+    const response = await axiosInstance.post(apiUrl(`/api/connectSend`, apiBase), {
       clientId
     })
     if (response.status === 200) {
@@ -135,10 +146,10 @@ export const serverConnectSend = (onPeerId: (peerId: string | null) => void, onS
   }
 }
 
-export const serverConnectRecieve = (onPeerId: (peerId: string) => void, onError: (error: "incorrectPin" | "serverError") => void) => {
+export const serverConnectRecieve = (onPeerId: (peerId: string) => void, onError: (error: "incorrectPin" | "serverError") => void, apiBase = "") => {
 
   const connectRecieve = async (clientId: string, secret: string) => {
-    const response = await axiosInstance.get(`/api/connectRecieve?secret=${secret}&peerId=${clientId}`)
+    const response = await axiosInstance.get(apiUrl(`/api/connectRecieve?secret=${secret}&peerId=${clientId}`, apiBase))
    
     if (response.status === 200) {
       onPeerId(response.data.peerId);
@@ -156,8 +167,8 @@ export const serverConnectRecieve = (onPeerId: (peerId: string) => void, onError
   }
 }
 
-export const loadIce = async (): Promise<IceResponse | null> => {
-  const response = await axiosInstance.get(`/api/ice`)
+export const loadIce = async (apiBase = ""): Promise<IceResponse | null> => {
+  const response = await axiosInstance.get(apiUrl(`/api/ice`, apiBase))
   if (response.status === 200) {
     return response.data;
   }

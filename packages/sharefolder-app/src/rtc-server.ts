@@ -1,197 +1,284 @@
-// RTC Server - Pure TypeScript version with lib imports
-import { getUUID, filesender } from "helpers"
-import { client, serverSendRecieve, serverConnectSend, loadIce, decodeChunkWithHeader, encodeChunkWithHeader } from "rtc-client"
-type FileInfo = {
-  name: string
-  size: number
-}[]
+import { getUUID } from 'helpers';
+import {
+  client,
+  serverSendRecieve,
+  loadIce,
+  decodeChunkWithHeader,
+  encodeChunkWithHeader,
+} from 'rtc-client';
 
-interface RTCConnectionInfo {
+type DirEntry = {
+  name: string;
+  type: 'file' | 'dir';
+  size?: number;
+  relativePath: string;
+};
+
+type RTCConnectionInfo = {
   peerId: string;
   folderId: string;
   folderPath: string;
-}
-
-//interface RTCServerState {
-//  connectionInfo: RTCConnectionInfo | null;
-//  status: string;
-//  rtcClient: any | null;
-//}
-
-class RTCServer {
-  private state: RTCServerState = {
-    connectionInfo: null,
-    status: 'Initializing...',
-    rtcClient: null
-  };
-
-  constructor() {
-    this.init();
-  }
-
-  private init(): void {
-    this.updateUI();
-    this.setupEventListeners();
-  }
-
-  private setupEventListeners(): void {
-    // Listen for connection info from main process
-    if (window.electronAPI && window.electronAPI.onRTCConnectionInfo) {
-      window.electronAPI.onRTCConnectionInfo((info: RTCConnectionInfo) => {
-        console.log('Received RTC connection info:', info);
-        this.state.connectionInfo = info;
-        this.state.status = 'Connected';
-        this.updateUI();
-
-      });
-    } else {
-      this.state.status = 'Electron API not available';
-      this.updateUI();
-    }
-  }
-
-
-  private updateUI(): void {
-    const app = document.getElementById('app');
-    if (!app) return;
-
-    if (!this.state.connectionInfo) {
-      app.innerHTML = `
-        <div style="padding: 20px; font-family: Arial, sans-serif;">
-          <h2>RTC Server TS FROM PARIS edit 2</h2>
-          <p>Status: ${this.state.status}</p>
-          <p>Waiting for connection info...</p>
-        </div>
-      `;
-    } else {
-      app.innerHTML = `
-        <div style="padding: 20px; font-family: Arial, sans-serif;">
-          <h2>RTC Server TS FROM PARIS edit 2</h2>
-          <p>Status: ${this.state.status}</p>
-          <div style="margin-top: 20px;">
-            <h3>Connection Details:</h3>
-            <p><strong>Peer ID:</strong> ${this.state.connectionInfo.peerId}</p>
-            <p><strong>Folder ID:</strong> ${this.state.connectionInfo.folderId}</p>
-            <p><strong>Folder Path:</strong> ${this.state.connectionInfo.folderPath}</p>
-          </div>
-          <div style="margin-top: 20px;">
-            <h3>RTC Controls:</h3>
-            <button 
-              style="padding: 10px 20px; margin: 5px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;"
-              onclick="window.startRTCConnection()"
-            >
-              Start Connection
-            </button>
-            <button 
-              style="padding: 10px 20px; margin: 5px; background-color: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer;"
-              onclick="window.stopRTCConnection()"
-            >
-              Stop Connection
-            </button>
-          </div>
-        </div>
-      `;
-    }
-  }
-}
+  signalingBaseUrl: string;
+};
 
 const logToDom = (message: string) => {
   console.log(message);
-
   const app = document.getElementById('app');
   if (!app) return;
-  app.innerHTML += `<p>${message}</p>`;
-}
+  app.innerHTML += `<p style="margin:4px 0;font-family:monospace;font-size:13px;">${message}</p>`;
+};
 
-//wait for dom to load
-document.addEventListener('DOMContentLoaded', () => {
-  // Listen for connection info from main process
-  if (window.electronAPI && window.electronAPI.onRTCConnectionInfo) {
-    window.electronAPI.onRTCConnectionInfo((info: RTCConnectionInfo) => {
-      logToDom(`Received RTC connection info: ${info}`);
-      //handshake with server to initiate the connection start
-      ///////////////////////////////////////////////////////////////////
-      //get uuid
-      const clientId = getUUID()
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-      ///////////////////////////////////////////////////////////////////
-      //server funcs
-      const onPeerId = async (peerId: string | null) => {
-        if (peerId) {
-      //load ice
-      const iceConfig = await loadIce()
+const BUFFER_MAX = 1_048_576;
+const CHUNK_SIZE = 200_000;
 
-          logToDom(`peer id: ${peerId} - ready to make rtc connection`)
+async function sendDiskFileRange(
+  folderPath: string,
+  relativePath: string,
+  requestID: number,
+  range: { startPos: number; endPos: number },
+  rtcSend: (message: ArrayBuffer) => void,
+  rtcBufferedAmount: () => number | null,
+  cancelled: () => boolean
+) {
+  let pos = range.startPos;
+  const endPos = range.endPos;
 
-          let rtcClient = null as any
-          const fileSender = filesender()
-          const handshakeServer = serverSendRecieve(clientId, peerId, (from: string, to: string, data: object, rtcid: number) => rtcClient.handshakeMsgRecieve(from, to, data, rtcid), onTimeout);
+  while (pos < endPos) {
+    if (cancelled()) {
+      return;
+    }
 
-          const onConnectionSuccess = () => {
-            console.log("onConnectionSuccess")
-    
-            //connection finished, close server 
-            handshakeServer.close()
-    
-            logToDom("RTC connected")
-    
-            const payload = encodeChunkWithHeader({ type: "fileInfo", data: FileInfo })
-    
-    
-            logToDom(`sending ${payload}`)
-    
-            //send file info
-            rtcClient.send(payload)
-          }
-    
-          const onMessageRecieved = (data: any) => {
-            const { header, chunk } =  decodeChunkWithHeader(data);
-    
-            if (header.type === "file-send") {
-              //get file ref
-              var filedom = document.getElementById('home-files');
-              //@ts-ignore
-              const fileHandle = filedom.files[header.data.fileinfo.index];
-    
-              //send file
-              if (fileHandle) {
-                fileSender.sendFile(fileHandle, header.data.requestID, header.data.range, rtcClient.send, rtcClient.bufferedAmount, () => { }, () => { });
-              }
-            }
-    
-            if (header.type === "cancel") {
-              //cancel current upload
-              fileSender.cancelUpload(header.data.requestID);
-              console.log('canceled!');
-            }
-    
-            //console.log("onMessageRecieved", data)
-          }
-    
-          const onConnectionClosed = () => {
-            console.log("onConnectionClosed")
-            logToDom("disconnected")
-          }
+    let buffered = rtcBufferedAmount();
+    while (buffered !== null && buffered >= BUFFER_MAX) {
+      if (cancelled()) return;
+      await sleep(15);
+      buffered = rtcBufferedAmount();
+    }
 
-          //we are ready to make rtc connection
-          rtcClient = client(iceConfig, onMessageRecieved, onConnectionSuccess, onConnectionClosed, handshakeServer.send);
-          rtcClient.connect(clientId, peerId, false)
-        }
-        else {
-          //navigate to error page
-          logToDom(`error - no peer id`)
-        }
-      }
-      const onTimeout = () => {
-        logToDom(`error - timeout`)
-      }
-      const scs = serverConnectSend(onPeerId, onSecret, onTimeout)
-      scs.connectSend(clientId)
-
-    });
-  } else {
-    logToDom('Electron API not available')
+    const sliceEnd = Math.min(pos + CHUNK_SIZE, endPos);
+    const buffer = await window.electronAPI!.readFileRange(
+      folderPath,
+      relativePath,
+      pos,
+      sliceEnd
+    );
+    const bytes = new Uint8Array(buffer);
+    rtcSend(
+      encodeChunkWithHeader(
+        {
+          type: 'file-send',
+          data: { requestID },
+        },
+        bytes
+      )
+    );
+    pos = sliceEnd;
   }
 
+  rtcSend(
+    encodeChunkWithHeader({
+      type: 'file-end',
+      data: { requestID, bytesSent: endPos - range.startPos },
+    })
+  );
+}
 
+async function registerHost(
+  signalingBaseUrl: string,
+  peerId: string,
+  hostId: string,
+  folderId: string
+) {
+  const response = await fetch(`${signalingBaseUrl}/host`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ peerId, hostId, folderId }),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to register host (${response.status})`);
+  }
+}
+
+function sendDirListing(
+  rtcClient: any,
+  payload: {
+    path: string;
+    entries: DirEntry[];
+    offset: number;
+    limit: number;
+    total: number;
+    hasMore: boolean;
+    append: boolean;
+  }
+) {
+  rtcClient.send(
+    encodeChunkWithHeader({
+      type: 'dirListing',
+      data: payload,
+    })
+  );
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const app = document.getElementById('app');
+  if (app) {
+    app.innerHTML =
+      '<div style="padding:16px;font-family:sans-serif;"><h2>ShareFolder RTC Host</h2><p>Waiting for connection...</p></div>';
+  }
+
+  if (!window.electronAPI?.onRTCConnectionInfo) {
+    logToDom('Electron API not available');
+    return;
+  }
+
+  window.electronAPI.onRTCConnectionInfo(async (info: RTCConnectionInfo) => {
+    try {
+      const { peerId, folderId, folderPath, signalingBaseUrl } = info;
+      logToDom(`Peer ${peerId} requested folder ${folderId}`);
+      logToDom(`Path: ${folderPath}`);
+      logToDom(`Signaling: ${signalingBaseUrl}`);
+
+      if (!folderPath || folderPath === 'Path not available') {
+        logToDom('ERROR: folder path missing');
+        return;
+      }
+
+      const hostId = getUUID();
+      await registerHost(signalingBaseUrl, peerId, hostId, folderId);
+      logToDom(`Registered host ${hostId}`);
+
+      const iceConfig = await loadIce(signalingBaseUrl);
+      if (!iceConfig) {
+        logToDom('ERROR: failed to load ICE config');
+        return;
+      }
+
+      let rtcClient: any = null;
+      const cancelledRequests = new Set<number>();
+      let currentFiles: DirEntry[] = [];
+      const PAGE_SIZE = 100;
+
+      const loadAndSendDir = async (relativePath: string, offset = 0) => {
+        const page = await window.electronAPI!.listDir(
+          folderPath,
+          relativePath,
+          offset,
+          PAGE_SIZE
+        );
+        const pageFiles = page.entries.filter((e) => e.type === 'file');
+        if (offset === 0) {
+          currentFiles = pageFiles;
+        } else {
+          currentFiles = [...currentFiles, ...pageFiles];
+        }
+        sendDirListing(rtcClient, {
+          path: relativePath,
+          entries: page.entries,
+          offset: page.offset,
+          limit: page.limit,
+          total: page.total,
+          hasMore: page.hasMore,
+          append: offset > 0,
+        });
+        logToDom(
+          `Listed ${page.entries.length}/${page.total} in "${relativePath || '/'}" (offset ${page.offset})`
+        );
+      };
+
+      const onTimeout = () => {
+        logToDom('ERROR: signaling timeout');
+      };
+
+      const handshakeServer = serverSendRecieve(
+        hostId,
+        peerId,
+        (from, to, data, rtcid) =>
+          rtcClient.handshakeMsgRecieve(from, to, data, rtcid),
+        onTimeout,
+        signalingBaseUrl
+      );
+
+      const onConnectionSuccess = async () => {
+        handshakeServer.close();
+        logToDom('RTC connected — sending root listing');
+        await loadAndSendDir('');
+      };
+
+      const onMessageRecieved = async (data: any) => {
+        const { header } = decodeChunkWithHeader(data);
+
+        if (header.type === 'listDir') {
+          const reqPath = (header.data?.path as string) || '';
+          const offset = Number(header.data?.offset) || 0;
+          try {
+            await loadAndSendDir(reqPath, offset);
+          } catch (err) {
+            logToDom(
+              `ERROR listing ${reqPath}: ${
+                err instanceof Error ? err.message : String(err)
+              }`
+            );
+          }
+        }
+
+        if (header.type === 'file-send') {
+          const requestID = header.data.requestID as number;
+          const fileIndex = header.data.fileinfo.index as number;
+          const range = header.data.range as {
+            startPos: number;
+            endPos: number;
+          };
+          // Prefer explicit path from client; fall back to current listing index
+          const relativePath =
+            (header.data.fileinfo.path as string) ||
+            (header.data.fileinfo.name as string) ||
+            currentFiles[fileIndex]?.relativePath;
+
+          if (!relativePath) {
+            logToDom(`Unknown file index ${fileIndex}`);
+            return;
+          }
+          logToDom(
+            `Sending ${relativePath} bytes ${range.startPos}-${range.endPos}`
+          );
+          cancelledRequests.delete(requestID);
+          await sendDiskFileRange(
+            folderPath,
+            relativePath,
+            requestID,
+            range,
+            rtcClient.send,
+            rtcClient.bufferedAmount,
+            () => cancelledRequests.has(requestID)
+          );
+        }
+
+        if (header.type === 'cancel') {
+          cancelledRequests.add(header.data.requestID);
+          logToDom(`Cancel request ${header.data.requestID}`);
+        }
+      };
+
+      const onConnectionClosed = () => {
+        logToDom('RTC disconnected');
+      };
+
+      rtcClient = client(
+        iceConfig,
+        onMessageRecieved,
+        onConnectionSuccess,
+        onConnectionClosed,
+        handshakeServer.send
+      );
+      rtcClient.connect(hostId, peerId, false);
+      logToDom('Starting WebRTC handshake...');
+    } catch (error) {
+      console.error(error);
+      logToDom(
+        `ERROR: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  });
 });

@@ -1,5 +1,4 @@
 import type { Configuration, WebpackPluginInstance, ModuleOptions } from 'webpack';
-import HtmlWebpackPlugin from 'html-webpack-plugin';
 import * as path from 'path';
 
 import { plugins as basePlugins } from './webpack.plugins';
@@ -12,7 +11,6 @@ const libAliases = {
   'ui-components': path.resolve(__dirname, '../../libs/ui-components/src'),
 };
 
-// Define renderer-specific rules WITHOUT asset-relocator-loader or native .node handling
 const rendererRules: Required<ModuleOptions>['rules'] = [
   {
     test: /\.tsx?$/,
@@ -31,28 +29,10 @@ const rendererRules: Required<ModuleOptions>['rules'] = [
 ];
 
 export const rendererConfig: Configuration = {
-  target: 'web',
-  entry: {
-    main_window: './src/renderer.tsx',
-    'rtc-server': './src/rtc-server.ts'
-  },
   module: {
     rules: rendererRules,
   },
-  plugins: [
-    ...basePlugins,
-    new HtmlWebpackPlugin({
-      template: './src/index.html',
-      filename: 'index.html',
-      chunks: ['main_window']
-    }) as unknown as WebpackPluginInstance,
-    new HtmlWebpackPlugin({
-      template: './src/index.html',
-      filename: 'rtc-server.html',
-      chunks: ['rtc-server']
-    }) as unknown as WebpackPluginInstance,
-
-  ],
+  plugins: [...basePlugins] as WebpackPluginInstance[],
   resolve: {
     extensions: ['.js', '.ts', '.jsx', '.tsx', '.css'],
     alias: libAliases,
@@ -76,9 +56,5 @@ export const rendererConfig: Configuration = {
       url: false,
       zlib: false,
     },
-  },
-  node: {
-    __dirname: false,
-    __filename: false,
   },
 };

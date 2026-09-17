@@ -12,6 +12,8 @@
     "moduleResolution": "node",
     "resolveJsonModule": true,
     "jsx": "react-jsx",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
     "paths": {
       "helpers": ["libs/helpers/src/index.ts"],
       "orm": ["libs/orm/src/index.ts"],
