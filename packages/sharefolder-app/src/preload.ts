@@ -33,6 +33,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   }) => void) => {
     ipcRenderer.on('rtc-connection-info', (_event, data) => callback(data));
   },
+  closeRtcWindow: () => {
+    ipcRenderer.send('close-rtc-window');
+  },
   sendNewConnections: (connections: Array<{ peerId: string; folderId: string }>) => {
     ipcRenderer.send('new-connections', connections);
   },

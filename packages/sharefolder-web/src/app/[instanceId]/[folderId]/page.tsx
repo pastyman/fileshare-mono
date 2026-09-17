@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { generateGuid } from '@/lib/utils';
 import {
@@ -85,21 +85,278 @@ function FileIcon() {
   );
 }
 
+function ListViewIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M8 6h12M8 12h12M8 18h12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <circle cx="4.5" cy="6" r="1.2" fill="currentColor" />
+      <circle cx="4.5" cy="12" r="1.2" fill="currentColor" />
+      <circle cx="4.5" cy="18" r="1.2" fill="currentColor" />
+    </svg>
+  );
+}
+
+function TileViewIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect x="3.5" y="3.5" width="7" height="7" stroke="currentColor" strokeWidth="1.6" />
+      <rect x="13.5" y="3.5" width="7" height="7" stroke="currentColor" strokeWidth="1.6" />
+      <rect x="3.5" y="13.5" width="7" height="7" stroke="currentColor" strokeWidth="1.6" />
+      <rect x="13.5" y="13.5" width="7" height="7" stroke="currentColor" strokeWidth="1.6" />
+    </svg>
+  );
+}
+
+type ViewMode = 'list' | 'tile';
+
+type MediaPreview = {
+  fileIndex: number;
+  name: string;
+  src: string;
+  kind: 'image' | 'video';
+};
+
+function mediaKind(fileName: string): 'image' | 'video' | null {
+  if (isImage(fileName)) return 'image';
+  if (isVideo(fileName)) return 'video';
+  return null;
+}
+
+function buildMediaSrc(file: DirEntry, fileIndex: number) {
+  const size = file.size ?? 0;
+  return `/sfdownload/${fileIndex}/${size}/${encodeURIComponent(file.relativePath)}`;
+}
+
+function ChevronLeftIcon() {
+  return (
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M15 5L8 12l7 7"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function ChevronRightIcon() {
+  return (
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M9 5l7 7-7 7"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function DownloadProgressBar({
+  progress,
+}: {
+  progress: { percent: number; done: boolean };
+}) {
+  return (
+    <div>
+      <div className="mb-2 flex justify-between text-sm text-[var(--sf-ink-muted)]">
+        <span>{progress.done ? 'Downloaded' : 'Downloading'}</span>
+        <span>{progress.percent}%</span>
+      </div>
+      <div className="h-1.5 w-full overflow-hidden bg-[var(--sf-bg-deep)]">
+        <div
+          className="h-full bg-[var(--sf-accent)] transition-all duration-150"
+          style={{ width: `${Math.min(100, progress.percent)}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function MediaLightbox({
+  items,
+  index,
+  onIndexChange,
+  onClose,
+}: {
+  items: MediaPreview[];
+  index: number;
+  onIndexChange: (index: number) => void;
+  onClose: () => void;
+}) {
+  const preview = items[index];
+  const canCycle = items.length > 1;
+
+  const goPrev = useCallback(() => {
+    if (!canCycle) return;
+    onIndexChange((index - 1 + items.length) % items.length);
+  }, [canCycle, index, items.length, onIndexChange]);
+
+  const goNext = useCallback(() => {
+    if (!canCycle) return;
+    onIndexChange((index + 1) % items.length);
+  }, [canCycle, index, items.length, onIndexChange]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        goPrev();
+      }
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        goNext();
+      }
+    };
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [onClose, goPrev, goNext]);
+
+  if (!preview) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex flex-col bg-[rgba(10,16,13,0.92)] sf-fade"
+      role="dialog"
+      aria-modal="true"
+      aria-label={preview.name}
+      onClick={onClose}
+    >
+      <div className="flex items-center justify-between gap-4 px-4 py-3 sm:px-6">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium text-white/90">
+            {preview.name}
+          </p>
+          {canCycle && (
+            <p className="mt-0.5 text-xs text-white/50">
+              {index + 1} / {items.length}
+            </p>
+          )}
+        </div>
+        <button
+          type="button"
+          className="shrink-0 rounded-sm px-3 py-1.5 text-sm font-semibold text-white/80 transition hover:bg-white/10 hover:text-white"
+          onClick={onClose}
+          aria-label="Close preview"
+        >
+          Close
+        </button>
+      </div>
+
+      <div className="relative flex min-h-0 flex-1 items-center justify-center p-4 sm:px-20 sm:py-8">
+        {canCycle && (
+          <button
+            type="button"
+            className="absolute left-2 top-1/2 z-10 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20 sm:left-4"
+            onClick={(e) => {
+              e.stopPropagation();
+              goPrev();
+            }}
+            aria-label="Previous preview"
+          >
+            <ChevronLeftIcon />
+          </button>
+        )}
+
+        {preview.kind === 'image' ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            key={preview.src}
+            src={preview.src}
+            alt={preview.name}
+            className="max-h-full max-w-full object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : (
+          <video
+            key={preview.src}
+            className="max-h-full max-w-full bg-black"
+            controls
+            autoPlay
+            onClick={(e) => e.stopPropagation()}
+          >
+            <source src={preview.src} />
+          </video>
+        )}
+
+        {canCycle && (
+          <button
+            type="button"
+            className="absolute right-2 top-1/2 z-10 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20 sm:right-4"
+            onClick={(e) => {
+              e.stopPropagation();
+              goNext();
+            }}
+            aria-label="Next preview"
+          >
+            <ChevronRightIcon />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function useFileDownload(
+  fileIndex: number,
+  size: number,
+  downloadName: string,
+  onDownloadStart: (fileIndex: number) => void
+) {
+  const [download, setDownload] = useState(false);
+
+  const triggerDownload = () => {
+    onDownloadStart(fileIndex);
+    setDownload(false);
+    setTimeout(() => setDownload(true), 150);
+  };
+
+  const downloadFrame = download ? (
+    <iframe
+      title={`download-${fileIndex}`}
+      src={`/sfdownload/${fileIndex}/${size}/${downloadName}`}
+      className="hidden"
+      width={0}
+      height={0}
+    />
+  ) : null;
+
+  return { triggerDownload, downloadFrame };
+}
+
 function FileRow({
   file,
   fileIndex,
   progress,
   onDownloadStart,
+  onPreview,
 }: {
   file: DirEntry;
   fileIndex: number;
   progress?: { percent: number; done: boolean } | null;
   onDownloadStart: (fileIndex: number) => void;
+  onPreview: (fileIndex: number) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [download, setDownload] = useState(false);
   const size = file.size ?? 0;
   const downloadName = encodeURIComponent(file.relativePath);
+  const { triggerDownload, downloadFrame } = useFileDownload(
+    fileIndex,
+    size,
+    downloadName,
+    onDownloadStart
+  );
+  const mediaSrc = buildMediaSrc(file, fileIndex);
+  const kind = mediaKind(file.name);
 
   return (
     <div className="sf-panel overflow-hidden">
@@ -123,58 +380,139 @@ function FileRow({
 
       {open && (
         <div className="space-y-4 border-t border-[var(--sf-line)] px-4 py-4 pl-11">
-          {isImage(file.name) && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={`/sfdownload/${fileIndex}/${size}/${downloadName}`}
-              alt={file.name}
-              className="max-h-80 max-w-full rounded-sm object-contain"
-            />
+          {kind === 'image' && (
+            <button
+              type="button"
+              className="block max-w-full cursor-zoom-in rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sf-accent)]"
+              onClick={() => onPreview(fileIndex)}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={mediaSrc}
+                alt={file.name}
+                className="max-h-80 max-w-full rounded-sm object-contain"
+              />
+            </button>
           )}
-          {isVideo(file.name) && (
-            <video className="aspect-video w-full bg-[var(--sf-ink)]" controls>
-              <source src={`/sfdownload/${fileIndex}/${size}/${downloadName}`} />
-            </video>
+          {kind === 'video' && (
+            <button
+              type="button"
+              className="block w-full cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sf-accent)]"
+              onClick={() => onPreview(fileIndex)}
+            >
+              <video
+                className="aspect-video w-full bg-[var(--sf-ink)]"
+                muted
+                playsInline
+                preload="metadata"
+              >
+                <source src={mediaSrc} />
+              </video>
+            </button>
           )}
 
           <button
             type="button"
             className="bg-[var(--sf-ink)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--sf-accent)]"
-            onClick={() => {
-              onDownloadStart(fileIndex);
-              setDownload(false);
-              setTimeout(() => setDownload(true), 150);
-            }}
+            onClick={triggerDownload}
           >
             Download
           </button>
 
-          {progress && (
-            <div>
-              <div className="mb-2 flex justify-between text-sm text-[var(--sf-ink-muted)]">
-                <span>{progress.done ? 'Downloaded' : 'Downloading'}</span>
-                <span>{progress.percent}%</span>
-              </div>
-              <div className="h-1.5 w-full overflow-hidden bg-[var(--sf-bg-deep)]">
-                <div
-                  className="h-full bg-[var(--sf-accent)] transition-all duration-150"
-                  style={{ width: `${Math.min(100, progress.percent)}%` }}
-                />
-              </div>
-            </div>
-          )}
-
-          {download && (
-            <iframe
-              title={`download-${fileIndex}`}
-              src={`/sfdownload/${fileIndex}/${size}/${downloadName}`}
-              className="hidden"
-              width={0}
-              height={0}
-            />
-          )}
+          {progress && <DownloadProgressBar progress={progress} />}
+          {downloadFrame}
         </div>
       )}
+    </div>
+  );
+}
+
+function FileTile({
+  file,
+  fileIndex,
+  progress,
+  onDownloadStart,
+  onPreview,
+}: {
+  file: DirEntry;
+  fileIndex: number;
+  progress?: { percent: number; done: boolean } | null;
+  onDownloadStart: (fileIndex: number) => void;
+  onPreview: (fileIndex: number) => void;
+}) {
+  const size = file.size ?? 0;
+  const downloadName = encodeURIComponent(file.relativePath);
+  const { triggerDownload, downloadFrame } = useFileDownload(
+    fileIndex,
+    size,
+    downloadName,
+    onDownloadStart
+  );
+  const mediaSrc = buildMediaSrc(file, fileIndex);
+  const kind = mediaKind(file.name);
+
+  return (
+    <div className="sf-panel flex flex-col overflow-hidden">
+      <div className="relative aspect-square bg-[var(--sf-bg-deep)]">
+        {kind === 'image' ? (
+          <button
+            type="button"
+            className="h-full w-full cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--sf-accent)]"
+            onClick={() => onPreview(fileIndex)}
+            aria-label={`Preview ${file.name}`}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={mediaSrc}
+              alt={file.name}
+              className="h-full w-full object-cover"
+              loading="lazy"
+            />
+          </button>
+        ) : kind === 'video' ? (
+          <button
+            type="button"
+            className="h-full w-full cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--sf-accent)]"
+            onClick={() => onPreview(fileIndex)}
+            aria-label={`Preview ${file.name}`}
+          >
+            <video
+              className="h-full w-full object-cover"
+              muted
+              playsInline
+              preload="metadata"
+            >
+              <source src={mediaSrc} />
+            </video>
+          </button>
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-[var(--sf-ink-muted)]">
+            <FileIcon />
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-1 flex-col gap-3 p-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium text-[var(--sf-ink)]" title={file.name}>
+            {file.name}
+          </p>
+          <p className="mt-0.5 text-xs text-[var(--sf-ink-muted)]">
+            {formatFileSize(String(size))}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          className="mt-auto bg-[var(--sf-ink)] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[var(--sf-accent)]"
+          onClick={triggerDownload}
+        >
+          Download
+        </button>
+
+        {progress && <DownloadProgressBar progress={progress} />}
+        {downloadFrame}
+      </div>
     </div>
   );
 }
@@ -193,10 +531,14 @@ export default function FolderPage() {
   const [downloadProgress, setDownloadProgress] = useState<
     Record<number, { percent: number; done: boolean }>
   >({});
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const trackedDownloadsRef = useRef<Set<number>>(new Set());
   const startedRef = useRef(false);
   const rtcClientRef = useRef<any>(null);
   const entriesLenRef = useRef(0);
+
+  const closePreview = useCallback(() => setPreviewIndex(null), []);
 
   useEffect(() => {
     entriesLenRef.current = entries.length;
@@ -205,6 +547,7 @@ export default function FolderPage() {
   const requestDir = useCallback((path: string, offset = 0) => {
     const rtc = rtcClientRef.current;
     if (!rtc) return;
+    setPreviewIndex(null);
     if (offset > 0) {
       setLoadingMore(true);
     } else {
@@ -385,8 +728,32 @@ export default function FolderPage() {
   const directories = entries.filter((e) => e.type === 'dir');
   const files = entries.filter((e) => e.type === 'file');
 
+  const previewable = useMemo<MediaPreview[]>(() => {
+    const fileEntries = entries.filter((e) => e.type === 'file');
+    return fileEntries.flatMap((file, fileIndex) => {
+      const kind = mediaKind(file.name);
+      if (!kind) return [];
+      return [
+        {
+          fileIndex,
+          name: file.name,
+          src: buildMediaSrc(file, fileIndex),
+          kind,
+        },
+      ];
+    });
+  }, [entries]);
+
+  const openPreview = useCallback(
+    (fileIndex: number) => {
+      const i = previewable.findIndex((item) => item.fileIndex === fileIndex);
+      if (i >= 0) setPreviewIndex(i);
+    },
+    [previewable]
+  );
+
   return (
-    <div className="mx-auto max-w-5xl px-6 pb-16 pt-20">
+    <div className="mx-auto max-w-6xl px-6 pb-16 pt-20">
       <header className="sf-rise mb-10">
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--sf-accent)]">
           Shared folder
@@ -417,34 +784,69 @@ export default function FolderPage() {
 
       {status === 'connected' && (
         <div className="sf-rise-delay space-y-5">
-          <nav className="flex flex-wrap items-center gap-1 text-sm">
-            {breadcrumbs.map((crumb, i) => (
-              <span
-                key={crumb.path || 'root'}
-                className="flex items-center gap-1"
-              >
-                {i > 0 && (
-                  <span className="text-[var(--sf-ink-muted)]">/</span>
-                )}
-                <button
-                  type="button"
-                  className={`rounded-sm px-1.5 py-0.5 transition ${
-                    i === breadcrumbs.length - 1
-                      ? 'font-semibold text-[var(--sf-ink)]'
-                      : 'text-[var(--sf-accent)] hover:bg-[var(--sf-accent-soft)]'
-                  }`}
-                  onClick={() => {
-                    if (i < breadcrumbs.length - 1) {
-                      requestDir(crumb.path);
-                    }
-                  }}
-                  disabled={i === breadcrumbs.length - 1 || listingLoading}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <nav className="flex flex-wrap items-center gap-1 text-sm">
+              {breadcrumbs.map((crumb, i) => (
+                <span
+                  key={crumb.path || 'root'}
+                  className="flex items-center gap-1"
                 >
-                  {crumb.label}
-                </button>
-              </span>
-            ))}
-          </nav>
+                  {i > 0 && (
+                    <span className="text-[var(--sf-ink-muted)]">/</span>
+                  )}
+                  <button
+                    type="button"
+                    className={`rounded-sm px-1.5 py-0.5 transition ${
+                      i === breadcrumbs.length - 1
+                        ? 'font-semibold text-[var(--sf-ink)]'
+                        : 'text-[var(--sf-accent)] hover:bg-[var(--sf-accent-soft)]'
+                    }`}
+                    onClick={() => {
+                      if (i < breadcrumbs.length - 1) {
+                        requestDir(crumb.path);
+                      }
+                    }}
+                    disabled={i === breadcrumbs.length - 1 || listingLoading}
+                  >
+                    {crumb.label}
+                  </button>
+                </span>
+              ))}
+            </nav>
+
+            <div
+              className="sf-panel inline-flex overflow-hidden p-0.5"
+              role="group"
+              aria-label="View mode"
+            >
+              <button
+                type="button"
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold transition ${
+                  viewMode === 'list'
+                    ? 'bg-[var(--sf-ink)] text-white'
+                    : 'text-[var(--sf-ink-muted)] hover:text-[var(--sf-ink)]'
+                }`}
+                aria-pressed={viewMode === 'list'}
+                onClick={() => setViewMode('list')}
+              >
+                <ListViewIcon />
+                List
+              </button>
+              <button
+                type="button"
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold transition ${
+                  viewMode === 'tile'
+                    ? 'bg-[var(--sf-ink)] text-white'
+                    : 'text-[var(--sf-ink-muted)] hover:text-[var(--sf-ink)]'
+                }`}
+                aria-pressed={viewMode === 'tile'}
+                onClick={() => setViewMode('tile')}
+              >
+                <TileViewIcon />
+                Tiles
+              </button>
+            </div>
+          </div>
 
           {listingLoading ? (
             <div className="sf-panel px-6 py-10 text-center text-[var(--sf-ink-muted)]">
@@ -454,7 +856,7 @@ export default function FolderPage() {
             <div className="sf-panel px-6 py-10 text-center text-[var(--sf-ink-muted)]">
               This folder is empty.
             </div>
-          ) : (
+          ) : viewMode === 'list' ? (
             <div className="space-y-2">
               {directories.map((dir) => (
                 <button
@@ -479,6 +881,7 @@ export default function FolderPage() {
                   fileIndex={fileIndex}
                   progress={downloadProgress[fileIndex]}
                   onDownloadStart={(i) => trackedDownloadsRef.current.add(i)}
+                  onPreview={openPreview}
                 />
               ))}
 
@@ -499,8 +902,69 @@ export default function FolderPage() {
                 </div>
               )}
             </div>
+          ) : (
+            <div className="space-y-4">
+              {directories.length > 0 && (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                  {directories.map((dir) => (
+                    <button
+                      key={dir.relativePath}
+                      type="button"
+                      className="sf-panel flex aspect-square flex-col items-center justify-center gap-3 p-4 text-center transition hover:bg-white/70"
+                      onClick={() => requestDir(dir.relativePath)}
+                    >
+                      <span className="text-[var(--sf-accent)]">
+                        <FolderIcon />
+                      </span>
+                      <span className="line-clamp-2 break-all text-sm font-medium text-[var(--sf-ink)]">
+                        {dir.name}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {files.length > 0 && (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                  {files.map((file, fileIndex) => (
+                    <FileTile
+                      key={file.relativePath}
+                      file={file}
+                      fileIndex={fileIndex}
+                      progress={downloadProgress[fileIndex]}
+                      onDownloadStart={(i) => trackedDownloadsRef.current.add(i)}
+                      onPreview={openPreview}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {hasMore && (
+                <button
+                  type="button"
+                  className="sf-panel w-full px-4 py-3 text-sm font-semibold text-[var(--sf-accent)] transition hover:bg-white/70 disabled:opacity-60"
+                  disabled={loadingMore}
+                  onClick={() =>
+                    requestDir(currentPath, entriesLenRef.current)
+                  }
+                >
+                  {loadingMore
+                    ? 'Loading more…'
+                    : `Load more (${entries.length} of ${totalEntries})`}
+                </button>
+              )}
+            </div>
           )}
         </div>
+      )}
+
+      {previewIndex !== null && previewable[previewIndex] && (
+        <MediaLightbox
+          items={previewable}
+          index={previewIndex}
+          onIndexChange={setPreviewIndex}
+          onClose={closePreview}
+        />
       )}
     </div>
   );

@@ -142,6 +142,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (!folderPath || folderPath === 'Path not available') {
         logToDom('ERROR: folder path missing');
+        window.electronAPI?.closeRtcWindow();
         return;
       }
 
@@ -152,6 +153,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const iceConfig = await loadIce(signalingBaseUrl);
       if (!iceConfig) {
         logToDom('ERROR: failed to load ICE config');
+        window.electronAPI?.closeRtcWindow();
         return;
       }
 
@@ -189,6 +191,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const onTimeout = () => {
         logToDom('ERROR: signaling timeout');
+        window.electronAPI?.closeRtcWindow();
       };
 
       const handshakeServer = serverSendRecieve(
@@ -261,8 +264,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       };
 
+      let windowClosing = false;
+      const closeHostWindow = () => {
+        if (windowClosing) return;
+        windowClosing = true;
+        try {
+          handshakeServer.close();
+        } catch {
+          // already closed
+        }
+        window.electronAPI?.closeRtcWindow();
+      };
+
       const onConnectionClosed = () => {
-        logToDom('RTC disconnected');
+        logToDom('RTC disconnected — closing host window');
+        closeHostWindow();
       };
 
       rtcClient = client(
@@ -279,6 +295,7 @@ document.addEventListener('DOMContentLoaded', () => {
       logToDom(
         `ERROR: ${error instanceof Error ? error.message : String(error)}`
       );
+      window.electronAPI?.closeRtcWindow();
     }
   });
 });

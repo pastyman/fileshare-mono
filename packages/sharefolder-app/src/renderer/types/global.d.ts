@@ -21,6 +21,7 @@ declare global {
         folderPath: string;
         signalingBaseUrl: string;
       }) => void) => void;
+      closeRtcWindow: () => void;
       sendNewConnections: (connections: Array<{ peerId: string; folderId: string }>) => void;
       listDir: (
         folderPath: string,

@@ -107,6 +107,17 @@ app.on('activate', () => {
   }
 });
 
+function closeRtcWindow(win: BrowserWindow) {
+  if (win.isDestroyed()) return;
+  // Detached DevTools become orphan windows unless closed first
+  if (win.webContents.isDevToolsOpened()) {
+    win.webContents.closeDevTools();
+  }
+  if (!win.isDestroyed()) {
+    win.close();
+  }
+}
+
 function openRTCWindow(peerId: string, folderId: string, folderPath?: string) {
   console.log(`Opening RTC host for folder: ${folderId} (${folderPath || 'path unknown'}), peer: ${peerId}`);
 
@@ -124,6 +135,12 @@ function openRTCWindow(peerId: string, folderId: string, folderPath?: string) {
 
   rtcWindow.loadURL(RTC_SERVER_WEBPACK_ENTRY);
   rtcWindow.webContents.openDevTools({ mode: 'detach' });
+
+  rtcWindow.on('close', () => {
+    if (!rtcWindow.isDestroyed() && rtcWindow.webContents.isDevToolsOpened()) {
+      rtcWindow.webContents.closeDevTools();
+    }
+  });
 
   rtcWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
     console.log(`Failed to load ${validatedURL}: ${errorDescription} (${errorCode})`);
@@ -294,6 +311,13 @@ app.whenReady().then(() => {
   ipcMain.handle('stop-connection-polling', async () => {
     stopConnectionPolling();
     return { success: true };
+  });
+
+  ipcMain.on('close-rtc-window', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win) {
+      closeRtcWindow(win);
+    }
   });
 
   // IPC: Database operations
