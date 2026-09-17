@@ -2,7 +2,22 @@ import { useState } from "react"
 import { Spacer, Txt, StyledBox, ButtonSave } from "ui-components"
 import { formatFileSize, isImage, isVideo } from "helpers"
 
-export const ViewFile = ({ file, index }: { file: any, index: number }) => {
+export type FileDownloadProgress = {
+  percent: number
+  done: boolean
+}
+
+export const ViewFile = ({
+  file,
+  index,
+  downloadProgress,
+  onDownloadStart,
+}: {
+  file: any
+  index: number
+  downloadProgress?: FileDownloadProgress | null
+  onDownloadStart?: (fileIndex: number) => void
+}) => {
   const [openFile, setOpenFile] = useState(false)
   const [downloadFile, setDownloadFile] = useState(false)
 
@@ -11,12 +26,15 @@ export const ViewFile = ({ file, index }: { file: any, index: number }) => {
   }
 
   const handleDownloadFile = () => {
+    onDownloadStart?.(index)
     setDownloadFile(false)
 
     setTimeout(() => {
       setDownloadFile(true)
     }, 150)
   }
+
+  const showDownloadProgress = Boolean(downloadProgress)
 
   return (
     <StyledBox
@@ -42,8 +60,39 @@ export const ViewFile = ({ file, index }: { file: any, index: number }) => {
           <ButtonSave
             text="Download file"
             sx={{ marginLeft: "auto" }}
-            onClick={() => handleDownloadFile()}
+            onClick={handleDownloadFile}
           />
+
+          {showDownloadProgress && downloadProgress && (
+            <>
+              <Spacer uc="medium" />
+              <Txt uc="boxTxt">
+                {downloadProgress.done ? "Downloaded" : "Downloading"}
+              </Txt>
+              <Spacer uc="small" />
+              <div
+                style={{
+                  width: "100%",
+                  height: 12,
+                  borderRadius: 8,
+                  backgroundColor: "#e6e6e6",
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    width: `${Math.min(100, Math.max(0, downloadProgress.percent))}%`,
+                    height: "100%",
+                    borderRadius: 8,
+                    backgroundColor: "#496EFF",
+                    transition: "width 150ms linear",
+                  }}
+                />
+              </div>
+              <Spacer uc="small" />
+              <Txt uc="boxTxtInfo">{downloadProgress.percent}%</Txt>
+            </>
+          )}
 
           {downloadFile && (
             <iframe src={`/sfdownload/${index}/${file.size}/${file.name}`} width="0" height="0" />
@@ -86,4 +135,3 @@ export const Disconnected = () => {
     </StyledBox>
   )
 }
-
