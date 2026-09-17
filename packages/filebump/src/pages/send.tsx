@@ -1,10 +1,47 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/router"
 import { Container, Spacer } from "ui-components"
 import { client, serverSendRecieve, loadIce, decodeChunkWithHeader, encodeChunkWithHeader } from "rtc-client"
 import { FileInfo } from "../components/File"
-import { Connecting, Connected, Disconnected } from "../components/Status"
+import { Connecting, Connected, Disconnected, Sending, UploadProgress } from "../components/Status"
 import { filesender } from "helpers"
+
+type RangeProgress = {
+  rangeBytes: number
+  percent: number
+  done: boolean
+}
+
+type FileTransferState = {
+  fileIndex: number
+  name: string
+  size: number
+  completedBytes: number
+  ranges: Map<number, RangeProgress>
+}
+
+const buildUpload = (file: FileTransferState): UploadProgress => {
+  let inFlightBytes = 0
+  let activeRanges = 0
+
+  file.ranges.forEach((range) => {
+    if (!range.done) {
+      activeRanges += 1
+      inFlightBytes += (range.rangeBytes * range.percent) / 100
+    }
+  })
+
+  const totalSent = Math.min(file.size, file.completedBytes + inFlightBytes)
+  const percent = Math.min(100, Math.floor((totalSent / Math.max(file.size, 1)) * 100))
+
+  return {
+    fileIndex: file.fileIndex,
+    name: file.name,
+    size: file.size,
+    percent,
+    done: activeRanges === 0 && percent >= 100,
+  }
+}
 
 const Index = ({ fileInfo, onNavigate }: {fileInfo: FileInfo, onNavigate: any }) => {
   const handleNavClick = (url: string, replace: boolean = false) => {
@@ -12,6 +49,8 @@ const Index = ({ fileInfo, onNavigate }: {fileInfo: FileInfo, onNavigate: any })
   }
 
   const [status, setStatus] = useState("connecting")
+  const [uploads, setUploads] = useState<UploadProgress[]>([])
+  const fileTransfersRef = useRef<Map<number, FileTransferState>>(new Map())
 
   //get client id's
   const router = useRouter()
@@ -21,6 +60,60 @@ const Index = ({ fileInfo, onNavigate }: {fileInfo: FileInfo, onNavigate: any })
   useEffect(() => {
     let rtcClient = null as any
     const fileSender = filesender()
+    fileTransfersRef.current = new Map()
+
+    const publishUploads = () => {
+      const nextUploads = Array.from(fileTransfersRef.current.values()).map(buildUpload)
+      setUploads(nextUploads)
+    }
+
+    const ensureFileTransfer = (fileIndex: number, fileHandle: File) => {
+      let fileTransfer = fileTransfersRef.current.get(fileIndex)
+      if (!fileTransfer) {
+        fileTransfer = {
+          fileIndex,
+          name: fileHandle.name,
+          size: fileHandle.size,
+          completedBytes: 0,
+          ranges: new Map(),
+        }
+        fileTransfersRef.current.set(fileIndex, fileTransfer)
+      }
+      return fileTransfer
+    }
+
+    const updateRangeProgress = (
+      fileIndex: number,
+      requestID: number,
+      rangeBytes: number,
+      percent: number,
+      done: boolean
+    ) => {
+      const fileTransfer = fileTransfersRef.current.get(fileIndex)
+      if (!fileTransfer) {
+        return
+      }
+
+      const existing = fileTransfer.ranges.get(requestID)
+      if (done) {
+        if (existing && !existing.done) {
+          fileTransfer.completedBytes = Math.min(
+            fileTransfer.size,
+            fileTransfer.completedBytes + rangeBytes
+          )
+        } else if (!existing) {
+          fileTransfer.completedBytes = Math.min(
+            fileTransfer.size,
+            fileTransfer.completedBytes + rangeBytes
+          )
+        }
+        fileTransfer.ranges.delete(requestID)
+      } else {
+        fileTransfer.ranges.set(requestID, { rangeBytes, percent, done: false })
+      }
+
+      publishUploads()
+    }
 
     const run = async () => {
       //load ice
@@ -59,7 +152,7 @@ const Index = ({ fileInfo, onNavigate }: {fileInfo: FileInfo, onNavigate: any })
       }
 
       const onMessageRecieved = (data: any) => {
-        const { header, chunk } =  decodeChunkWithHeader(data);
+        const { header } =  decodeChunkWithHeader(data);
 
         if (header.type === "file-send") {
           //get file ref
@@ -69,22 +162,41 @@ const Index = ({ fileInfo, onNavigate }: {fileInfo: FileInfo, onNavigate: any })
 
           //send file
           if (fileHandle) {
+            const requestID = header.data.requestID;
+            const fileIndex = header.data.fileinfo.index;
             const actualEndPos = Math.min(header.data.range.endPos, fileHandle.size);
+            const rangeBytes = Math.max(actualEndPos - header.data.range.startPos, 1);
+
+            ensureFileTransfer(fileIndex, fileHandle)
+            updateRangeProgress(fileIndex, requestID, rangeBytes, 0, false)
+
             fileSender.sendFile(
               fileHandle,
-              header.data.requestID,
+              requestID,
               { startPos: header.data.range.startPos, endPos: actualEndPos },
               rtcClient.send,
               rtcClient.bufferedAmount,
-              () => { },
-              () => { }
+              (percent: number) => {
+                updateRangeProgress(fileIndex, requestID, rangeBytes, percent, false)
+              },
+              () => {
+                updateRangeProgress(fileIndex, requestID, rangeBytes, 100, true)
+              }
             );
           }
         }
 
         if (header.type === "cancel") {
           //cancel current upload
-          fileSender.cancelUpload(header.data.requestID);
+          const requestID = header.data.requestID
+          fileSender.cancelUpload(requestID);
+
+          fileTransfersRef.current.forEach((fileTransfer, fileIndex) => {
+            const range = fileTransfer.ranges.get(requestID)
+            if (range) {
+              updateRangeProgress(fileIndex, requestID, range.rangeBytes, range.percent, true)
+            }
+          })
           console.log('canceled!');
         }
 
@@ -130,7 +242,11 @@ const Index = ({ fileInfo, onNavigate }: {fileInfo: FileInfo, onNavigate: any })
 
       {status === "connecting" && (<Connecting />)}
 
-      {status === "connected" && (<Connected />)}
+      {status === "connected" && (
+        <>
+          {uploads.length === 0 ? <Connected /> : <Sending uploads={uploads} />}
+        </>
+      )}
 
       {status === "disconnected" && (<Disconnected handleNavClick={handleNavClick} />)}
 

@@ -1,6 +1,18 @@
 import {encodeChunkWithHeader, decodeChunkWithHeader} from "rtc-client";
 
-export const swcomm = (downloadUpdateCallback: any, rtcObj: any) => {
+export type DownloadProgressEvent = {
+  percent: number
+  requestID: number
+  fileIndex: number
+  name: string
+  size: number
+  isRange: boolean
+}
+
+export const swcomm = (
+  downloadUpdateCallback: (progress: DownloadProgressEvent) => void,
+  rtcObj: any
+) => {
   "use strict";
 
   let swDataAccept = false;
@@ -19,7 +31,7 @@ export const swcomm = (downloadUpdateCallback: any, rtcObj: any) => {
           registration.unregister();
         }
 
-        navigator.serviceWorker.register('/swv04092026r6.js')
+        navigator.serviceWorker.register('/swv04092026r8.js')
           .then(function (reg) {
             console.log('SERVICE WORKER READY!!!');
           })
@@ -41,7 +53,7 @@ export const swcomm = (downloadUpdateCallback: any, rtcObj: any) => {
         rtcObj.send(encodeChunkWithHeader(header));
       }
       if (header.type === "progress") {
-        downloadUpdateCallback(header.data.percent);
+        downloadUpdateCallback(header.data);
       }
       if (header.type === "cancel") {
         console.log("[filebump sw] cancel", header.data);
