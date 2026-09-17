@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "lib": ["ES2022"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "noEmit": true,
+    "baseUrl": "../..",
+    "paths": {
+      "helpers": ["libs/helpers/src/index.ts"],
+      "orm": ["libs/orm/src/index.ts"],
+      "rtc-client": ["libs/rtc-client/src/index.ts"],
+      "types": ["libs/types/src/index.ts"],
+      "ui-components": ["libs/ui-components/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"],
+  "ts-node": {
+    "require": ["tsconfig-paths/register"],
+    "files": true,
+    "compilerOptions": {
+      "module": "commonjs"
+    }
+  }
+}

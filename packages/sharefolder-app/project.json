@@ -1,0 +1,23 @@
+{
+  "name": "sharefolder-app",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/sharefolder-app/src",
+  "projectType": "application",
+  "tags": [],
+  "targets": {
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "npm run dev",
+        "cwd": "packages/sharefolder-app"
+      }
+    },
+    "package": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "npm run package",
+        "cwd": "packages/sharefolder-app"
+      }
+    }
+  }
+}

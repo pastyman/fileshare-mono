@@ -4,6 +4,13 @@ import CircleIcon from "@mui/icons-material/CircleOutlined"
 import Button from "@mui/material/Button"
 import MenuItem from "@mui/material/MenuItem"
 
+type SelectChipChildProps = {
+  value: string | number
+  children?: React.ReactNode
+}
+
+type SelectChipChild = React.ReactElement<SelectChipChildProps>
+
 export const SelectChip = ({
   sx = {},
   sxChecked = {},
@@ -15,14 +22,14 @@ export const SelectChip = ({
   sx?: object
   sxChecked?: object
   placeholder?: string
-  children: React.ReactElement[]
+  children: SelectChipChild[]
   value?: string | number | undefined
   onChange?: (value: string | number) => void
   size?: "small" | "medium"
 }) => {
   const [intValue, setIntValue] = useState(value)
 
-  const handleChange = (child: React.ReactElement) => {
+  const handleChange = (child: SelectChipChild) => {
     setIntValue(child.props.value)
 
     if (onChange) {
