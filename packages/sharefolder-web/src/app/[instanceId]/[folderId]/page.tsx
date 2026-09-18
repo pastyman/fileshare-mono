@@ -33,9 +33,16 @@ type Status =
   | 'error'
   | 'disconnected';
 
-const SIGNALING_BASE = (
+const CONFIGURED_SIGNALING_BASE = (
   process.env.NEXT_PUBLIC_SIGNALING_URL ?? ''
 ).replace(/\/$/, '');
+
+/** Same-origin by default so Cloudflare/tunnel clients never hit localhost. */
+function getSignalingBase() {
+  if (CONFIGURED_SIGNALING_BASE) return CONFIGURED_SIGNALING_BASE;
+  if (typeof window !== 'undefined') return window.location.origin;
+  return '';
+}
 
 const statusCopy: Record<Status, string> = {
   signaling: 'Contacting desktop app…',
@@ -47,10 +54,11 @@ const statusCopy: Record<Status, string> = {
 };
 
 async function waitForHost(peerId: string, timeoutMs = 120_000): Promise<string> {
+  const signalingBase = getSignalingBase();
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
     const res = await fetch(
-      `${SIGNALING_BASE}/host?peerId=${encodeURIComponent(peerId)}`
+      `${signalingBase}/host?peerId=${encodeURIComponent(peerId)}`
     );
     if (res.status === 200) {
       const data = await res.json();
@@ -609,7 +617,8 @@ export default function FolderPage() {
         if (cancelled) return;
 
         setStatus('connecting');
-        const iceConfig = await loadIce(SIGNALING_BASE);
+        const signalingBase = getSignalingBase();
+        const iceConfig = await loadIce(signalingBase);
         if (!iceConfig) {
           throw new Error('Failed to load ICE servers');
         }
@@ -625,7 +634,7 @@ export default function FolderPage() {
               setError('Connection timed out');
             }
           },
-          SIGNALING_BASE
+          signalingBase
         );
 
         const onDownloadProgress = (progress: DownloadProgressEvent) => {
@@ -640,17 +649,53 @@ export default function FolderPage() {
           }));
         };
 
+        let listingTimeout: ReturnType<typeof setTimeout> | null = null;
+
+        const requestRootListing = () => {
+          setListingLoading(true);
+          try {
+            rtcClient.send(
+              encodeChunkWithHeader({
+                type: 'listDir',
+                data: { path: '', offset: 0 },
+              })
+            );
+          } catch (err) {
+            console.error('Failed to request folder listing', err);
+            setListingLoading(false);
+            setError('Failed to request folder listing');
+            return;
+          }
+          if (listingTimeout) clearTimeout(listingTimeout);
+          listingTimeout = setTimeout(() => {
+            if (cancelled) return;
+            setListingLoading((loading) => {
+              if (loading) {
+                setError('Timed out waiting for folder listing');
+              }
+              return false;
+            });
+          }, 20_000);
+        };
+
         const onConnectionSuccess = () => {
           handshakeServer?.close();
           setStatus('connected');
-          setListingLoading(true);
           serviceWorkerComm = swcomm(onDownloadProgress, rtcClient);
           serviceWorkerComm.init();
+          // Always request listing from the client. Relying on the host's
+          // unsolicited push races with connection-success and can leave the
+          // UI stuck on "Loading folder…".
+          requestRootListing();
         };
 
         const onMessageRecieved = (data: any) => {
           const { header } = decodeChunkWithHeader(data);
           if (header.type === 'dirListing') {
+            if (listingTimeout) {
+              clearTimeout(listingTimeout);
+              listingTimeout = null;
+            }
             const payload = header.data as {
               path: string;
               entries: DirEntry[];
@@ -669,8 +714,13 @@ export default function FolderPage() {
             );
             setListingLoading(false);
             setLoadingMore(false);
+            setError(null);
           }
           if (header.type === 'fileInfo') {
+            if (listingTimeout) {
+              clearTimeout(listingTimeout);
+              listingTimeout = null;
+            }
             const payload = header.data;
             const files = Array.isArray(payload)
               ? payload
@@ -693,6 +743,10 @@ export default function FolderPage() {
         };
 
         const onConnectionClosed = () => {
+          if (listingTimeout) {
+            clearTimeout(listingTimeout);
+            listingTimeout = null;
+          }
           if (!cancelled) setStatus('disconnected');
         };
 

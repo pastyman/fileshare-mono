@@ -286,8 +286,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const onConnectionSuccess = async () => {
         handshakeServer.close();
-        logToDom('RTC connected — sending root listing');
-        await loadAndSendDir('');
+        logToDom('RTC connected — waiting briefly, then sending root listing');
+        // Give the browser a moment to request listDir after connection-success.
+        await sleep(250);
+        try {
+          await loadAndSendDir('');
+        } catch (err) {
+          logToDom(
+            `ERROR sending root listing: ${
+              err instanceof Error ? err.message : String(err)
+            }`
+          );
+        }
       };
 
       const onMessageRecieved = async (data: any) => {
