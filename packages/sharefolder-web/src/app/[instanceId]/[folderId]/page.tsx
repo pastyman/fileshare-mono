@@ -69,9 +69,9 @@ async function waitForHost(peerId: string, timeoutMs = 120_000): Promise<string>
   throw new Error('Timed out waiting for ShareFolder desktop app');
 }
 
-function FolderIcon() {
+function FolderIcon({ size = 20 }: { size?: number }) {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
       <path
         d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2h7.5A2.5 2.5 0 0 1 21 9.5v7A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5v-9Z"
         stroke="currentColor"
@@ -81,9 +81,9 @@ function FolderIcon() {
   );
 }
 
-function FileIcon() {
+function FileIcon({ size = 18 }: { size?: number }) {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
       <path
         d="M7 3.5h7l5 5V20a1.5 1.5 0 0 1-1.5 1.5h-10.5A1.5 1.5 0 0 1 5.5 20V5A1.5 1.5 0 0 1 7 3.5Z"
         stroke="currentColor"
@@ -142,6 +142,31 @@ function buildMediaSrc(
 }
 
 const PREVIEW_THUMB_WIDTH = 512;
+
+/** Defer WebRTC thumb/video loads until the tile is near the viewport. */
+function useNearViewport<T extends HTMLElement>(rootMargin = '240px') {
+  const ref = useRef<T | null>(null);
+  const [near, setNear] = useState(false);
+
+  useEffect(() => {
+    if (near) return;
+    const el = ref.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry?.isIntersecting) return;
+        setNear(true);
+        observer.disconnect();
+      },
+      { rootMargin, threshold: 0 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [near, rootMargin]);
+
+  return { ref, near };
+}
 
 function ChevronLeftIcon() {
   return (
@@ -407,7 +432,7 @@ function FileRow({
               <img
                 src={thumbSrc}
                 alt={file.name}
-                className="max-h-80 max-w-full rounded-sm object-contain"
+                className="max-h-80 max-w-full h-auto w-auto rounded-sm object-contain"
               />
             </button>
           )}
@@ -468,24 +493,26 @@ function FileTile({
   const mediaSrc = buildMediaSrc(file, fileIndex);
   const thumbSrc = buildMediaSrc(file, fileIndex, { thumb: PREVIEW_THUMB_WIDTH });
   const kind = mediaKind(file.name);
+  const { ref: tileRef, near: shouldLoadPreview } = useNearViewport<HTMLDivElement>();
 
   return (
-    <div className="sf-panel flex flex-col overflow-hidden">
-      <div className="relative aspect-square bg-[var(--sf-bg-deep)]">
+    <div ref={tileRef} className="sf-panel flex h-full flex-col overflow-hidden">
+      <div className="relative aspect-square shrink-0 bg-[var(--sf-bg-deep)]">
         {kind === 'image' ? (
           <button
             type="button"
-            className="h-full w-full cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--sf-accent)]"
+            className="flex h-full w-full cursor-zoom-in items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--sf-accent)]"
             onClick={() => onPreview(fileIndex)}
             aria-label={`Preview ${file.name}`}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={thumbSrc}
-              alt={file.name}
-              className="h-full w-full object-cover"
-              loading="lazy"
-            />
+            {shouldLoadPreview ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={thumbSrc}
+                alt={file.name}
+                className="max-h-full max-w-full h-auto w-auto object-contain"
+              />
+            ) : null}
           </button>
         ) : kind === 'video' ? (
           <button
@@ -494,23 +521,25 @@ function FileTile({
             onClick={() => onPreview(fileIndex)}
             aria-label={`Preview ${file.name}`}
           >
-            <video
-              className="h-full w-full object-cover"
-              muted
-              playsInline
-              preload="metadata"
-            >
-              <source src={mediaSrc} />
-            </video>
+            {shouldLoadPreview ? (
+              <video
+                className="h-full w-full object-cover"
+                muted
+                playsInline
+                preload="metadata"
+              >
+                <source src={mediaSrc} />
+              </video>
+            ) : null}
           </button>
         ) : (
           <div className="flex h-full w-full items-center justify-center text-[var(--sf-ink-muted)]">
-            <FileIcon />
+            <FileIcon size={56} />
           </div>
         )}
       </div>
 
-      <div className="flex flex-1 flex-col gap-3 p-3">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 p-3">
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-[var(--sf-ink)]" title={file.name}>
             {file.name}
@@ -968,40 +997,44 @@ export default function FolderPage() {
             </div>
           ) : (
             <div className="space-y-4">
-              {directories.length > 0 && (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-                  {directories.map((dir) => (
-                    <button
-                      key={dir.relativePath}
-                      type="button"
-                      className="sf-panel flex aspect-square flex-col items-center justify-center gap-3 p-4 text-center transition hover:bg-white/70"
-                      onClick={() => requestDir(dir.relativePath)}
-                    >
-                      <span className="text-[var(--sf-accent)]">
-                        <FolderIcon />
-                      </span>
-                      <span className="line-clamp-2 break-all text-sm font-medium text-[var(--sf-ink)]">
-                        {dir.name}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                {directories.map((dir) => (
+                  <button
+                    key={dir.relativePath}
+                    type="button"
+                    className="sf-panel flex h-full flex-col overflow-hidden text-left transition hover:bg-white/70"
+                    onClick={() => requestDir(dir.relativePath)}
+                  >
+                    <div className="relative flex aspect-square shrink-0 items-center justify-center bg-[var(--sf-bg-deep)] text-[var(--sf-accent)]">
+                      <FolderIcon size={56} />
+                    </div>
+                    <div className="flex min-h-0 flex-1 flex-col gap-3 p-3">
+                      <div className="min-w-0">
+                        <p
+                          className="truncate text-sm font-medium text-[var(--sf-ink)]"
+                          title={dir.name}
+                        >
+                          {dir.name}
+                        </p>
+                        <p className="mt-0.5 text-xs text-[var(--sf-ink-muted)]">
+                          Folder
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                ))}
 
-              {files.length > 0 && (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-                  {files.map((file, fileIndex) => (
-                    <FileTile
-                      key={file.relativePath}
-                      file={file}
-                      fileIndex={fileIndex}
-                      progress={downloadProgress[fileIndex]}
-                      onDownloadStart={(i) => trackedDownloadsRef.current.add(i)}
-                      onPreview={openPreview}
-                    />
-                  ))}
-                </div>
-              )}
+                {files.map((file, fileIndex) => (
+                  <FileTile
+                    key={file.relativePath}
+                    file={file}
+                    fileIndex={fileIndex}
+                    progress={downloadProgress[fileIndex]}
+                    onDownloadStart={(i) => trackedDownloadsRef.current.add(i)}
+                    onPreview={openPreview}
+                  />
+                ))}
+              </div>
 
               {hasMore && (
                 <button

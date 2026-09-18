@@ -554,9 +554,11 @@ app.whenReady().then(() => {
 
       const { width } = img.getSize();
       const targetWidth = Math.max(1, Math.floor(Number(maxWidth) || 512));
+      // Never upscale: only shrink when wider than the requested max.
+      const outputWidth = Math.min(width, targetWidth);
       const output =
-        width > targetWidth
-          ? img.resize({ width: targetWidth, quality: 'best' })
+        outputWidth < width
+          ? img.resize({ width: outputWidth, quality: 'best' })
           : img;
 
       const jpeg = output.toJPEG(82);

@@ -142,7 +142,7 @@ async function sendImageThumbnailOrOriginal(
 
   if (thumb && thumb.byteLength > 0) {
     logToDom(
-      `Sending ${maxWidth}px JPEG preview for ${relativePath} (${thumb.byteLength} bytes)`
+      `Sending JPEG preview for ${relativePath} (max ${maxWidth}px, ${thumb.byteLength} bytes)`
     );
     await sendBytes(
       new Uint8Array(thumb),
