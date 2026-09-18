@@ -112,7 +112,7 @@ export const Multi = ({
   addMode = "prepend",
 }: {
   name?: string
-  children: React.ReactElement[]
+  children: React.ReactElement<{ name?: string; subheading?: string }>[]
   onAdd: () => void
   onDelete: (i: number) => void
   onOpenChange: (i: number) => void

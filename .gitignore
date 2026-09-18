@@ -43,3 +43,10 @@ Thumbs.db
 
 .nx/
 .qodo
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+!**/env.example
+

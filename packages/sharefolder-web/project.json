@@ -1,0 +1,46 @@
+{
+  "name": "sharefolder-web",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/sharefolder-web",
+  "projectType": "application",
+  "tags": [],
+  "targets": {
+    "build": {
+      "executor": "@nx/next:build",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "outputPath": "dist/packages/sharefolder-web"
+      },
+      "configurations": {
+        "development": {
+          "outputPath": "packages/sharefolder-web"
+        },
+        "production": {}
+      }
+    },
+    "serve": {
+      "executor": "@nx/next:server",
+      "defaultConfiguration": "development",
+      "options": {
+        "buildTarget": "sharefolder-web:build",
+        "dev": true
+      },
+      "configurations": {
+        "development": {
+          "buildTarget": "sharefolder-web:build:development",
+          "dev": true,
+          "port": 3010
+        },
+        "production": {
+          "buildTarget": "sharefolder-web:build:production",
+          "dev": false,
+          "port": 3010
+        }
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

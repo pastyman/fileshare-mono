@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES6",
+    "allowJs": true,
+    "module": "commonjs",
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "noImplicitAny": true,
+    "sourceMap": true,
+    "baseUrl": "../..",
+    "outDir": "dist",
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "jsx": "react-jsx",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "paths": {
+      "helpers": ["libs/helpers/src/index.ts"],
+      "orm": ["libs/orm/src/index.ts"],
+      "rtc-client": ["libs/rtc-client/src/index.ts"],
+      "types": ["libs/types/src/index.ts"],
+      "ui-components": ["libs/ui-components/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*"]
+}

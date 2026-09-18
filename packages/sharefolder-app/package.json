@@ -1,0 +1,57 @@
+{
+  "name": "sharefolder-app",
+  "productName": "sharefolder",
+  "version": "1.0.0",
+  "description": "ShareFolder Electron application",
+  "main": ".webpack/main",
+  "private": true,
+  "scripts": {
+    "start": "electron-forge start",
+    "dev": "ELECTRON_DISABLE_SANDBOX=1 NODE_ENV=development CONNECTION_ENDPOINT=http://localhost:3010/connections SIGNALING_BASE=http://localhost:3010 WEB_BASE=http://localhost:3010 electron-forge start",
+    "package": "electron-forge package",
+    "make": "electron-forge make",
+    "publish": "electron-forge publish",
+    "lint": "eslint --ext .ts,.tsx ."
+  },
+  "keywords": [],
+  "author": {
+    "name": "Paris Val Baker",
+    "email": "parisvalbaker@yahoo.co.uk"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@electron-forge/plugin-webpack": "^7.8.3",
+    "@emotion/react": "^11.11.0",
+    "@emotion/styled": "^11.11.0",
+    "@mui/icons-material": "^5.15.0",
+    "@mui/material": "^5.15.0",
+    "@types/sqlite3": "^3.1.11",
+    "@vercel/webpack-asset-relocator-loader": "^1.10.0",
+    "css-loader": "^7.1.2",
+    "electron-squirrel-startup": "^1.0.1",
+    "fork-ts-checker-webpack-plugin": "^9.1.0",
+    "html-webpack-plugin": "^5.6.0",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-router-dom": "^6.23.0",
+    "sqlite3": "^5.1.7",
+    "style-loader": "^4.0.0",
+    "ts-loader": "^9.5.2",
+    "util": "^0.12.5"
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "^7.8.3",
+    "@electron-forge/maker-deb": "^7.8.3",
+    "@electron-forge/maker-rpm": "^7.8.3",
+    "@electron-forge/maker-squirrel": "^7.8.3",
+    "@electron-forge/maker-zip": "^7.8.3",
+    "@electron-forge/plugin-auto-unpack-natives": "^7.8.3",
+    "@electron-forge/plugin-fuses": "^7.8.3",
+    "@electron/fuses": "^1.8.0",
+    "@types/react": "^19.1.10",
+    "@types/react-dom": "^19.1.7",
+    "electron": "37.2.6",
+    "ts-node": "^10.9.2",
+    "webpack-cli": "^6.0.1"
+  }
+}

@@ -6,12 +6,13 @@ import {
 } from "@typegoose/typegoose"
 import {
   MessagingSchema,
-  ConnectSchema
-
+  ConnectSchema,
+  HostRegistrationSchema,
 } from "./schemas"
 import {
   Messaging,
-  Connect
+  Connect,
+  HostRegistration,
 } from "types"
 
 export const getORMi = (mongoURI: string) => {
@@ -45,9 +46,20 @@ export const getORMi = (mongoURI: string) => {
     )
     const ModelConnect = addModelToTypegoose(ModelConnectRaw, Connect)
 
+    const ModelHostRegistrationRaw = mongooseInstance.model(
+      "hostRegistration",
+      HostRegistrationSchema,
+      "host_registrations"
+    )
+    const ModelHostRegistration = addModelToTypegoose(
+      ModelHostRegistrationRaw,
+      HostRegistration
+    )
+
     return {
       ModelMessaging,
-      ModelConnect
+      ModelConnect,
+      ModelHostRegistration,
     }
   }
 
@@ -55,7 +67,8 @@ export const getORMi = (mongoURI: string) => {
     string,
     {
       ModelMessaging: ReturnModelType<typeof Messaging>,
-      ModelConnect: ReturnModelType<typeof Connect>
+      ModelConnect: ReturnModelType<typeof Connect>,
+      ModelHostRegistration: ReturnModelType<typeof HostRegistration>,
     }
   > = {}
   const getClient = () => {
@@ -67,10 +80,12 @@ export const getORMi = (mongoURI: string) => {
 
   const getMessagingModel = () => getClient().ModelMessaging
   const getConnectModel = () => getClient().ModelConnect
+  const getHostRegistrationModel = () => getClient().ModelHostRegistration
 
   return {
     getMessagingModel,
     getConnectModel,
+    getHostRegistrationModel,
   }
 }
 

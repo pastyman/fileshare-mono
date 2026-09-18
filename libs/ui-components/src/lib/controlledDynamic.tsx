@@ -29,7 +29,7 @@ export const ControlledDynamic = <A extends {}>({
   name: Path<A>
   errors: FieldErrors<A>
   rules?: RegisterOptions<A>
-  children: React.ReactElement
+  children: React.ReactElement<Record<string, unknown>>
   transform?: { input: (value: string) => {}; output: (value: string) => {} }
   isFormLoading?: Boolean
 }) => (

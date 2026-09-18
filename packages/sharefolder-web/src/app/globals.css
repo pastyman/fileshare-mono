@@ -1,0 +1,119 @@
+@import "tailwindcss";
+
+:root {
+  --sf-bg: #f3f6f4;
+  --sf-bg-deep: #e4ece7;
+  --sf-ink: #14201a;
+  --sf-ink-muted: #5a6b62;
+  --sf-accent: #1f6b4f;
+  --sf-accent-soft: #d7ebe1;
+  --sf-line: rgba(20, 32, 26, 0.1);
+  --sf-surface: rgba(255, 255, 255, 0.72);
+  --background: var(--sf-bg);
+  --foreground: var(--sf-ink);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sf-sans);
+  --font-display: var(--font-sf-display);
+  --font-mono: var(--font-sf-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--sf-ink);
+  background:
+    radial-gradient(1200px 600px at 10% -10%, #d9efe4 0%, transparent 55%),
+    radial-gradient(900px 500px at 90% 0%, #dce6f0 0%, transparent 50%),
+    linear-gradient(180deg, #f7faf8 0%, var(--sf-bg) 40%, var(--sf-bg-deep) 100%);
+  background-attachment: fixed;
+  font-family: var(--font-sf-sans), "Segoe UI", sans-serif;
+}
+
+::selection {
+  background: var(--sf-accent-soft);
+  color: var(--sf-ink);
+}
+
+@keyframes sf-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes sf-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes sf-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -8px, 0);
+  }
+}
+
+.sf-rise {
+  animation: sf-rise 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.sf-rise-delay {
+  animation: sf-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both;
+}
+
+.sf-rise-delay-2 {
+  animation: sf-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.24s both;
+}
+
+.sf-fade {
+  animation: sf-fade 1s ease both;
+}
+
+.sf-drift {
+  animation: sf-drift 7s ease-in-out infinite;
+}
+
+.sf-display {
+  font-family: var(--font-sf-display), Georgia, serif;
+  letter-spacing: -0.03em;
+  line-height: 0.95;
+}
+
+.sf-panel {
+  background: var(--sf-surface);
+  border: 1px solid var(--sf-line);
+  backdrop-filter: blur(10px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sf-rise,
+  .sf-rise-delay,
+  .sf-rise-delay-2,
+  .sf-fade,
+  .sf-drift {
+    animation: none;
+  }
+}

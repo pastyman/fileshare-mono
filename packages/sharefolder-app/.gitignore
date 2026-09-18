@@ -1,0 +1,11 @@
+# Electron Forge / webpack build output
+.webpack/
+.vite/
+out/
+
+# Dependencies (hoisted at repo root, but keep local installs ignored)
+node_modules/
+
+# Logs / OS
+*.log
+.DS_Store

@@ -7,13 +7,13 @@ export const formatFileSize = (bytesInput: string) => {
 }
 
 export const isImage = (fileName: string) => {
-  const ext = fileName.split('.').pop();
-  return ext && ['jpg', 'jpeg', 'png', 'gif'].includes(ext);
+  const ext = fileName.split('.').pop()?.toLowerCase();
+  return !!ext && ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
 }
 
 export const isVideo = (fileName: string) => {
-  const ext = fileName.split('.').pop();
-  return ext && ['mp4'].includes(ext);
+  const ext = fileName.split('.').pop()?.toLowerCase();
+  return !!ext && ['mp4'].includes(ext);
 }
 
 export const isDownload = (fileName: string) => {
