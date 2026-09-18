@@ -250,6 +250,114 @@ function stopConnectionPolling() {
 // Register IPC handlers immediately
 console.log('Starting to register IPC handlers...');
 
+function readJpegExifOrientation(buf: Buffer): number {
+  if (buf.length < 4 || buf[0] !== 0xff || buf[1] !== 0xd8) return 1;
+  let offset = 2;
+  while (offset + 4 < buf.length) {
+    if (buf[offset] !== 0xff) break;
+    const marker = buf[offset + 1];
+    const size = buf.readUInt16BE(offset + 2);
+    if (marker === 0xe1 && size >= 8) {
+      const start = offset + 4;
+      if (buf.toString('ascii', start, start + 4) !== 'Exif') return 1;
+      const tiff = start + 6;
+      if (tiff + 8 > buf.length) return 1;
+      const little = buf.toString('ascii', tiff, tiff + 2) === 'II';
+      const u16 = (o: number) =>
+        little ? buf.readUInt16LE(o) : buf.readUInt16BE(o);
+      const u32 = (o: number) =>
+        little ? buf.readUInt32LE(o) : buf.readUInt32BE(o);
+      const ifd0 = tiff + u32(tiff + 4);
+      if (ifd0 + 2 > buf.length) return 1;
+      const entries = u16(ifd0);
+      for (let i = 0; i < entries; i++) {
+        const entry = ifd0 + 2 + i * 12;
+        if (entry + 12 > buf.length) break;
+        if (u16(entry) === 0x0112) {
+          return u16(entry + 8) || 1;
+        }
+      }
+      return 1;
+    }
+    if (marker === 0xda) break;
+    offset += 2 + size;
+  }
+  return 1;
+}
+
+function mapBitmap(
+  img: Electron.NativeImage,
+  width: number,
+  height: number,
+  map: (
+    x: number,
+    y: number,
+    srcW: number,
+    srcH: number
+  ) => { x: number; y: number }
+): Electron.NativeImage {
+  const src = img.toBitmap();
+  const srcW = img.getSize().width;
+  const srcH = img.getSize().height;
+  const dest = Buffer.alloc(width * height * 4);
+  for (let y = 0; y < srcH; y++) {
+    for (let x = 0; x < srcW; x++) {
+      const { x: nx, y: ny } = map(x, y, srcW, srcH);
+      const srcIdx = (y * srcW + x) * 4;
+      const dstIdx = (ny * width + nx) * 4;
+      src.copy(dest, dstIdx, srcIdx, srcIdx + 4);
+    }
+  }
+  return nativeImage.createFromBitmap(dest, { width, height });
+}
+
+/** Bake EXIF orientation into pixels so JPEG thumbs match browser/camera view. */
+function applyExifOrientation(
+  img: Electron.NativeImage,
+  orientation: number
+): Electron.NativeImage {
+  const { width, height } = img.getSize();
+  switch (orientation) {
+    case 2: // flip horizontal
+      return mapBitmap(img, width, height, (x, y, w) => ({
+        x: w - 1 - x,
+        y,
+      }));
+    case 3: // 180°
+      return mapBitmap(img, width, height, (x, y, w, h) => ({
+        x: w - 1 - x,
+        y: h - 1 - y,
+      }));
+    case 4: // flip vertical
+      return mapBitmap(img, width, height, (x, y, _w, h) => ({
+        x,
+        y: h - 1 - y,
+      }));
+    case 5: // transpose
+      return mapBitmap(img, height, width, (x, y) => ({
+        x: y,
+        y: x,
+      }));
+    case 6: // 90° CW (common phone portrait)
+      return mapBitmap(img, height, width, (x, y, _w, h) => ({
+        x: h - 1 - y,
+        y: x,
+      }));
+    case 7: // transverse
+      return mapBitmap(img, height, width, (x, y, w, h) => ({
+        x: h - 1 - y,
+        y: w - 1 - x,
+      }));
+    case 8: // 90° CCW
+      return mapBitmap(img, height, width, (x, y, w) => ({
+        x: y,
+        y: w - 1 - x,
+      }));
+    default:
+      return img;
+  }
+}
+
 app.whenReady().then(() => {
   // Configure development API endpoint if in development mode
   if (process.env.NODE_ENV === 'development') {
@@ -547,9 +655,15 @@ app.whenReady().then(() => {
         throw new Error('Invalid file path');
       }
 
-      const img = nativeImage.createFromPath(fullPath);
+      const fileBuf = await fsp.readFile(fullPath);
+      let img = nativeImage.createFromBuffer(fileBuf);
       if (img.isEmpty()) {
         return null;
+      }
+
+      const orientation = readJpegExifOrientation(fileBuf);
+      if (orientation !== 1) {
+        img = applyExifOrientation(img, orientation);
       }
 
       const { width } = img.getSize();
