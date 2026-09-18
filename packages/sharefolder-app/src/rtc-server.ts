@@ -33,6 +33,45 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const BUFFER_MAX = 1_048_576;
 const CHUNK_SIZE = 200_000;
 
+async function sendBytes(
+  bytes: Uint8Array,
+  requestID: number,
+  rtcSend: (message: ArrayBuffer) => void,
+  rtcBufferedAmount: () => number | null,
+  cancelled: () => boolean
+) {
+  let pos = 0;
+  while (pos < bytes.byteLength) {
+    if (cancelled()) return;
+
+    let buffered = rtcBufferedAmount();
+    while (buffered !== null && buffered >= BUFFER_MAX) {
+      if (cancelled()) return;
+      await sleep(15);
+      buffered = rtcBufferedAmount();
+    }
+
+    const sliceEnd = Math.min(pos + CHUNK_SIZE, bytes.byteLength);
+    rtcSend(
+      encodeChunkWithHeader(
+        {
+          type: 'file-send',
+          data: { requestID },
+        },
+        bytes.subarray(pos, sliceEnd)
+      )
+    );
+    pos = sliceEnd;
+  }
+
+  rtcSend(
+    encodeChunkWithHeader({
+      type: 'file-end',
+      data: { requestID, bytesSent: bytes.byteLength },
+    })
+  );
+}
+
 async function sendDiskFileRange(
   folderPath: string,
   relativePath: string,
@@ -82,6 +121,48 @@ async function sendDiskFileRange(
       type: 'file-end',
       data: { requestID, bytesSent: endPos - range.startPos },
     })
+  );
+}
+
+async function sendImageThumbnailOrOriginal(
+  folderPath: string,
+  relativePath: string,
+  requestID: number,
+  fileSize: number,
+  maxWidth: number,
+  rtcSend: (message: ArrayBuffer) => void,
+  rtcBufferedAmount: () => number | null,
+  cancelled: () => boolean
+) {
+  const thumb = await window.electronAPI!.getImageThumbnail(
+    folderPath,
+    relativePath,
+    maxWidth
+  );
+
+  if (thumb && thumb.byteLength > 0) {
+    logToDom(
+      `Sending ${maxWidth}px JPEG preview for ${relativePath} (${thumb.byteLength} bytes)`
+    );
+    await sendBytes(
+      new Uint8Array(thumb),
+      requestID,
+      rtcSend,
+      rtcBufferedAmount,
+      cancelled
+    );
+    return;
+  }
+
+  logToDom(`Thumbnail unavailable for ${relativePath}; sending original`);
+  await sendDiskFileRange(
+    folderPath,
+    relativePath,
+    requestID,
+    { startPos: 0, endPos: fileSize },
+    rtcSend,
+    rtcBufferedAmount,
+    cancelled
   );
 }
 
@@ -229,6 +310,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (header.type === 'file-send') {
           const requestID = header.data.requestID as number;
           const fileIndex = header.data.fileinfo.index as number;
+          const fileSize = Number(header.data.fileinfo.size) || 0;
+          const thumbWidth = Number(header.data.thumbnail) || 0;
           const range = header.data.range as {
             startPos: number;
             endPos: number;
@@ -243,10 +326,26 @@ document.addEventListener('DOMContentLoaded', () => {
             logToDom(`Unknown file index ${fileIndex}`);
             return;
           }
+
+          cancelledRequests.delete(requestID);
+
+          if (thumbWidth > 0) {
+            await sendImageThumbnailOrOriginal(
+              folderPath,
+              relativePath,
+              requestID,
+              fileSize || currentFiles[fileIndex]?.size || 0,
+              thumbWidth,
+              rtcClient.send,
+              rtcClient.bufferedAmount,
+              () => cancelledRequests.has(requestID)
+            );
+            return;
+          }
+
           logToDom(
             `Sending ${relativePath} bytes ${range.startPos}-${range.endPos}`
           );
-          cancelledRequests.delete(requestID);
           await sendDiskFileRange(
             folderPath,
             relativePath,

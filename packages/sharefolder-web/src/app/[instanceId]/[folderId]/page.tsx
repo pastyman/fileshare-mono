@@ -33,8 +33,9 @@ type Status =
   | 'error'
   | 'disconnected';
 
-const SIGNALING_BASE =
-  process.env.NEXT_PUBLIC_SIGNALING_URL || 'http://localhost:3001';
+const SIGNALING_BASE = (
+  process.env.NEXT_PUBLIC_SIGNALING_URL ?? ''
+).replace(/\/$/, '');
 
 const statusCopy: Record<Status, string> = {
   signaling: 'Contacting desktop app…',
@@ -122,10 +123,17 @@ function mediaKind(fileName: string): 'image' | 'video' | null {
   return null;
 }
 
-function buildMediaSrc(file: DirEntry, fileIndex: number) {
+function buildMediaSrc(
+  file: DirEntry,
+  fileIndex: number,
+  options?: { thumb?: number }
+) {
   const size = file.size ?? 0;
-  return `/sfdownload/${fileIndex}/${size}/${encodeURIComponent(file.relativePath)}`;
+  const base = `/sfdownload/${fileIndex}/${size}/${encodeURIComponent(file.relativePath)}`;
+  return options?.thumb ? `${base}?thumb=${options.thumb}` : base;
 }
+
+const PREVIEW_THUMB_WIDTH = 512;
 
 function ChevronLeftIcon() {
   return (
@@ -356,6 +364,7 @@ function FileRow({
     onDownloadStart
   );
   const mediaSrc = buildMediaSrc(file, fileIndex);
+  const thumbSrc = buildMediaSrc(file, fileIndex, { thumb: PREVIEW_THUMB_WIDTH });
   const kind = mediaKind(file.name);
 
   return (
@@ -388,7 +397,7 @@ function FileRow({
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={mediaSrc}
+                src={thumbSrc}
                 alt={file.name}
                 className="max-h-80 max-w-full rounded-sm object-contain"
               />
@@ -449,6 +458,7 @@ function FileTile({
     onDownloadStart
   );
   const mediaSrc = buildMediaSrc(file, fileIndex);
+  const thumbSrc = buildMediaSrc(file, fileIndex, { thumb: PREVIEW_THUMB_WIDTH });
   const kind = mediaKind(file.name);
 
   return (
@@ -463,7 +473,7 @@ function FileTile({
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={mediaSrc}
+              src={thumbSrc}
               alt={file.name}
               className="h-full w-full object-cover"
               loading="lazy"

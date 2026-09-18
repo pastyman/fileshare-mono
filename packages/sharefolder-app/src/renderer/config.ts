@@ -9,7 +9,7 @@ export function getFolderWebUrl(instanceId: string, folderId: string): string {
 }
 
 export const CONNECTION_CONFIG = {
-  endpoint: 'https://api.sharefolder.io/connections',
+  endpoint: 'https://sharefolder.io/connections',
   pollInterval: 3000,
   requestTimeout: 5000,
 } as const;
@@ -39,5 +39,5 @@ export function getSignalingBaseUrl(): string {
   if (DEV_API_ENDPOINT) {
     return DEV_API_ENDPOINT.replace(/\/connections\/?$/, '');
   }
-  return 'https://api.sharefolder.io';
+  return 'https://sharefolder.io';
 }

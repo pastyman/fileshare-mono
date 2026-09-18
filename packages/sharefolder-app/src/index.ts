@@ -1,5 +1,6 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell } from 'electron';
 import * as path from 'path';
+import * as fsp from 'fs/promises';
 
 console.log('=== MAIN PROCESS STARTING ===');
 
@@ -44,7 +45,6 @@ import {
   getConnectionEndpoint,
   getSignalingBaseUrl,
 } from './renderer/config';
-import * as fsp from 'fs/promises';
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
   app.quit();
@@ -254,7 +254,7 @@ app.whenReady().then(() => {
   // Configure development API endpoint if in development mode
   if (process.env.NODE_ENV === 'development') {
     const connectionsEndpoint =
-      process.env.CONNECTION_ENDPOINT || 'http://localhost:3001/connections';
+      process.env.CONNECTION_ENDPOINT || 'http://localhost:3010/connections';
     setDevApiEndpoint(connectionsEndpoint);
     setDevSignalingBase(
       process.env.SIGNALING_BASE || connectionsEndpoint.replace(/\/connections\/?$/, '')
@@ -530,6 +530,40 @@ app.whenReady().then(() => {
       } finally {
         await fd.close();
       }
+    }
+  );
+
+  ipcMain.handle(
+    'get-image-thumbnail',
+    async (
+      _event,
+      folderPath: string,
+      relativePath: string,
+      maxWidth = 512
+    ): Promise<ArrayBuffer | null> => {
+      const root = path.resolve(folderPath);
+      const fullPath = path.resolve(root, relativePath);
+      if (!fullPath.startsWith(root + path.sep) && fullPath !== root) {
+        throw new Error('Invalid file path');
+      }
+
+      const img = nativeImage.createFromPath(fullPath);
+      if (img.isEmpty()) {
+        return null;
+      }
+
+      const { width } = img.getSize();
+      const targetWidth = Math.max(1, Math.floor(Number(maxWidth) || 512));
+      const output =
+        width > targetWidth
+          ? img.resize({ width: targetWidth, quality: 'best' })
+          : img;
+
+      const jpeg = output.toJPEG(82);
+      return jpeg.buffer.slice(
+        jpeg.byteOffset,
+        jpeg.byteOffset + jpeg.byteLength
+      );
     }
   );
 

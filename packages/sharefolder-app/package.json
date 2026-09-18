@@ -7,7 +7,7 @@
   "private": true,
   "scripts": {
     "start": "electron-forge start",
-    "dev": "ELECTRON_DISABLE_SANDBOX=1 NODE_ENV=development CONNECTION_ENDPOINT=http://localhost:3001/connections SIGNALING_BASE=http://localhost:3001 WEB_BASE=http://localhost:3010 electron-forge start",
+    "dev": "ELECTRON_DISABLE_SANDBOX=1 NODE_ENV=development CONNECTION_ENDPOINT=http://localhost:3010/connections SIGNALING_BASE=http://localhost:3010 WEB_BASE=http://localhost:3010 electron-forge start",
     "package": "electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",

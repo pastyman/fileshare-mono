@@ -46,6 +46,11 @@ declare global {
         start: number,
         end: number
       ) => Promise<ArrayBuffer>;
+      getImageThumbnail: (
+        folderPath: string,
+        relativePath: string,
+        maxWidth?: number
+      ) => Promise<ArrayBuffer | null>;
 
       dbGetInstance: () => Promise<string>;
       dbListUsers: () => Promise<any[]>;

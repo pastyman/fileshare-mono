@@ -379,19 +379,21 @@ self.addEventListener('fetch', function (event) {
 
     //file name example
     // /sfdownload/${index}/${file.size}/${file.name}
+    // optional: ?thumb=512 for computed preview JPEG
 
-    //extract info from file name
-    var urlEndIndex = url.split('/').length - 1
-    var urlArray = url.split('/')
-    var fileName = decodeURIComponent(urlArray[urlEndIndex]);
-    var fileSize = parseInt(urlArray[urlEndIndex - 1]);
-    var fileIndex = parseInt(urlArray[urlEndIndex - 2]);
+    var urlObj = new URL(url);
+    var pathParts = urlObj.pathname.split('/');
+    var fileName = decodeURIComponent(pathParts[pathParts.length - 1]);
+    var fileSize = parseInt(pathParts[pathParts.length - 2], 10);
+    var fileIndex = parseInt(pathParts[pathParts.length - 3], 10);
+    var thumbWidth = parseInt(urlObj.searchParams.get('thumb') || '', 10);
+    var isThumbRequest = Number.isFinite(thumbWidth) && thumbWidth > 0;
 
     //set defaults
     var isRangeRequest = false;
     var startPos = 0;
     var endPos = fileSize - 1;
-    if (event.request.headers.get('range')) {
+    if (!isThumbRequest && event.request.headers.get('range')) {
       //range request made
       isRangeRequest = true;
       const rangeHeader = event.request.headers.get('range');
@@ -413,20 +415,23 @@ self.addEventListener('fetch', function (event) {
     var percentSent = -1;
     var lastProgressSentAt = 0;
     var pos = startPos;
+    // Thumb size is unknown until the host finishes encoding — rely on file-end bytesSent.
     const rangeSpan = Math.max(endPos - startPos + 1, 1);
-    const expectedBytes = rangeSpan;
+    const expectedBytes = isThumbRequest ? 0 : rangeSpan;
 
     createRequestMeta(requestID, expectedBytes);
     console.log({
       type: "file-send",
       data: {
         requestID,
+        thumbnail: isThumbRequest ? thumbWidth : undefined,
         range: {
           startPos,
           endPos: endPos + 1
         },
         fileinfo: {
           name: fileName,
+          path: fileName,
           size: fileSize,
           index: fileIndex,
         }
@@ -438,12 +443,14 @@ self.addEventListener('fetch', function (event) {
       type: "file-send",
       data: {
         requestID,
+        thumbnail: isThumbRequest ? thumbWidth : undefined,
         range: {
           startPos,
           endPos: endPos + 1
         },
         fileinfo: {
           name: fileName,
+          path: fileName,
           size: fileSize,
           index: fileIndex,
         }
@@ -452,7 +459,7 @@ self.addEventListener('fetch', function (event) {
 
     function sendProgress(percent, force) {
       // Range/preview fetches don't need UI progress — skip the BroadcastChannel work.
-      if (isRangeRequest) {
+      if (isRangeRequest || isThumbRequest) {
         return;
       }
 
@@ -554,9 +561,11 @@ self.addEventListener('fetch', function (event) {
           lastDataRecievedTime = Date.now();
           deliveredCount += 1;
 
-          percentage = Math.floor((meta.deliveredBytes / targetBytes) * 100);
-          if (percentage !== percentSent) {
-            sendProgress(percentage, false);
+          if (targetBytes > 0) {
+            percentage = Math.floor((meta.deliveredBytes / targetBytes) * 100);
+            if (percentage !== percentSent) {
+              sendProgress(percentage, false);
+            }
           }
 
           controller.enqueue(binaryData);
@@ -635,26 +644,36 @@ self.addEventListener('fetch', function (event) {
     });
 
     //response - Content-Length must match the bytes we will stream
-    var contentLength = isRangeRequest ? ((endPos - startPos) + 1) : fileSize;
-    var init = {
-      headers: [
-        ['Accept-Ranges', 'bytes'],
-        ['Content-Type', getMime(fileName)],
-        ['Content-Disposition', 'attachment; filename="' + fileName + '"'],
-        ['Content-Length', contentLength],
-      ]
-    };
-
-    if (isRangeRequest) {
+    // Thumb JPEG size is unknown until encoding finishes, so omit Content-Length.
+    var contentType = isThumbRequest ? 'image/jpeg' : getMime(fileName);
+    var init;
+    if (isThumbRequest) {
+      init = {
+        headers: [
+          ['Content-Type', contentType],
+          ['Cache-Control', 'private, max-age=3600'],
+        ]
+      };
+    } else if (isRangeRequest) {
+      var contentLength = ((endPos - startPos) + 1);
       init = {
         status: 206,
         statusText: 'Partial Content',
         headers: [
           ['Accept-Ranges', 'bytes'],
           ['Content-Length', contentLength],
-          ['Content-Type', getMime(fileName)],
+          ['Content-Type', contentType],
           ['Content-Range', 'bytes ' + startPos + '-' + endPos + '/' + fileSize]]
       }
+    } else {
+      init = {
+        headers: [
+          ['Accept-Ranges', 'bytes'],
+          ['Content-Type', contentType],
+          ['Content-Disposition', 'attachment; filename="' + fileName + '"'],
+          ['Content-Length', fileSize],
+        ]
+      };
     }
 
     var response = new Response(stream, init);

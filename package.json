@@ -5,7 +5,6 @@
   "scripts": {
     "dev:filebump": "nx serve filebump",
     "dev:sharefolder-web": "nx serve sharefolder-web",
-    "dev:sharefolder-api": "nx serve sharefolder-api",
     "dev:sharefolder-app": "nx serve sharefolder-app"
   },
   "private": true,

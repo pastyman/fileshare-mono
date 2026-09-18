@@ -55,6 +55,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   ) => {
     return ipcRenderer.invoke('read-file-range', folderPath, relativePath, start, end);
   },
+  getImageThumbnail: async (
+    folderPath: string,
+    relativePath: string,
+    maxWidth = 512
+  ): Promise<ArrayBuffer | null> => {
+    return ipcRenderer.invoke('get-image-thumbnail', folderPath, relativePath, maxWidth);
+  },
 
   // Database operations
   dbGetInstance: async (): Promise<string> => {
