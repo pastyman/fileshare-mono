@@ -15,7 +15,6 @@ interface FolderEntry {
 
 interface UserEntry {
   id?: number;
-  username: string;
   email: string;
   fullName: string;
   password: string;
@@ -85,8 +84,7 @@ class Database {
     const createUsersTable = `
       CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE NOT NULL,
-        email TEXT NOT NULL,
+        email TEXT UNIQUE NOT NULL,
         fullName TEXT NOT NULL,
         password TEXT NOT NULL,
         isActive INTEGER DEFAULT 1,
@@ -130,11 +128,78 @@ class Database {
             reject(err);
             return;
           }
+          this.migrateUsersDropUsername()
+            .then(() => resolve())
+            .catch(reject);
         });
-
-        resolve();
       });
     });
+  }
+
+  /** Drop legacy username column from existing installs. */
+  private async migrateUsersDropUsername(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'));
+        return;
+      }
+
+      this.db.all('PRAGMA table_info(users)', (err: Error | null, columns: any[]) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+
+        const hasUsername = (columns || []).some((col) => col.name === 'username');
+        if (!hasUsername) {
+          resolve();
+          return;
+        }
+
+        this.db!.serialize(() => {
+          this.db!.run('BEGIN TRANSACTION');
+          this.db!.run(`
+            CREATE TABLE users_new (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              email TEXT UNIQUE NOT NULL,
+              fullName TEXT NOT NULL,
+              password TEXT NOT NULL,
+              isActive INTEGER DEFAULT 1,
+              createdAt INTEGER NOT NULL,
+              updatedAt INTEGER NOT NULL
+            )
+          `);
+          this.db!.run(`
+            INSERT INTO users_new (id, email, fullName, password, isActive, createdAt, updatedAt)
+            SELECT id, email, fullName, password, isActive, createdAt, updatedAt FROM users
+          `);
+          this.db!.run('DROP TABLE users');
+          this.db!.run('ALTER TABLE users_new RENAME TO users', (renameErr: Error | null) => {
+            if (renameErr) {
+              this.db!.run('ROLLBACK');
+              reject(renameErr);
+              return;
+            }
+            this.db!.run('COMMIT', (commitErr: Error | null) => {
+              if (commitErr) reject(commitErr);
+              else resolve();
+            });
+          });
+        });
+      });
+    });
+  }
+
+  private mapUserRow(row: any): UserEntry {
+    return {
+      id: row.id,
+      email: row.email,
+      fullName: row.fullName,
+      password: row.password,
+      isActive: Boolean(row.isActive),
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
   }
 
   async close(): Promise<void> {
@@ -200,15 +265,12 @@ class Database {
       }
 
       this.db.all(
-        'SELECT * FROM users ORDER BY createdAt DESC',
+        'SELECT id, email, fullName, password, isActive, createdAt, updatedAt FROM users ORDER BY createdAt DESC',
         (err: Error | null, rows: any[]) => {
           if (err) {
             reject(err);
           } else {
-            resolve(rows.map((row: any) => ({
-              ...row,
-              isActive: Boolean(row.isActive)
-            })));
+            resolve(rows.map((row: any) => this.mapUserRow(row)));
           }
         }
       );
@@ -224,8 +286,8 @@ class Database {
 
       const now = Date.now();
       this.db.run(
-        'INSERT INTO users (username, email, fullName, password, isActive, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [userData.username, userData.email, userData.fullName, userData.password, userData.isActive ? 1 : 0, now, now],
+        'INSERT INTO users (email, fullName, password, isActive, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)',
+        [userData.email, userData.fullName, userData.password, userData.isActive ? 1 : 0, now, now],
         function(err: Error | null) {
           if (err) {
             reject(err);
@@ -244,7 +306,12 @@ class Database {
         return;
       }
 
-      const fields = Object.keys(updates).filter(key => key !== 'id');
+      const allowed = new Set(['email', 'fullName', 'password', 'isActive']);
+      const fields = Object.keys(updates).filter((key) => allowed.has(key));
+      if (fields.length === 0) {
+        resolve();
+        return;
+      }
       const values = fields.map(field => updates[field as keyof typeof updates]);
       values.push(Date.now()); // updatedAt
       values.push(id);
@@ -286,18 +353,19 @@ class Database {
         return;
       }
 
-      this.db.get('SELECT * FROM users WHERE id = ?', [id], (err: Error | null, row: any) => {
-        if (err) {
-          reject(err);
-        } else if (row) {
-          resolve({
-            ...row,
-            isActive: Boolean(row.isActive)
-          });
-        } else {
-          resolve(undefined);
+      this.db.get(
+        'SELECT id, email, fullName, password, isActive, createdAt, updatedAt FROM users WHERE id = ?',
+        [id],
+        (err: Error | null, row: any) => {
+          if (err) {
+            reject(err);
+          } else if (row) {
+            resolve(this.mapUserRow(row));
+          } else {
+            resolve(undefined);
+          }
         }
-      });
+      );
     });
   }
 
