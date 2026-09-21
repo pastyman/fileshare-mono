@@ -96,5 +96,35 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   dbDebug: async (): Promise<any> => {
     return ipcRenderer.invoke('db-debug');
-  }
+  },
+  dbGetStatsSummary: async (days = 14): Promise<any> => {
+    return ipcRenderer.invoke('db-get-stats-summary', days);
+  },
+  recordDownloadEvent: async (
+    folderId: string,
+    relativePath: string,
+    bytes: number
+  ): Promise<{ success: boolean }> => {
+    return ipcRenderer.invoke(
+      'db-record-download-event',
+      folderId,
+      relativePath,
+      bytes
+    );
+  },
+  recordPreviewEvent: async (
+    folderId: string,
+    relativePath: string,
+    bytes: number
+  ): Promise<{ success: boolean }> => {
+    return ipcRenderer.invoke(
+      'db-record-preview-event',
+      folderId,
+      relativePath,
+      bytes
+    );
+  },
+  onStatsUpdated: (callback: (data: { at: number }) => void) => {
+    ipcRenderer.on('stats-updated', (_event, data) => callback(data));
+  },
 });

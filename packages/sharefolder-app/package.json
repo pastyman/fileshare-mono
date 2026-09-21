@@ -25,6 +25,7 @@
     "@emotion/styled": "^11.11.0",
     "@mui/icons-material": "^5.15.0",
     "@mui/material": "^5.15.0",
+    "@mui/x-charts": "^7.29.1",
     "@types/sqlite3": "^3.1.11",
     "@vercel/webpack-asset-relocator-loader": "^1.10.0",
     "css-loader": "^7.1.2",
