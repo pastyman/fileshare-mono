@@ -229,37 +229,50 @@ export default function Home() {
                 gap: 2
               }}
             >
-              {/* Status Icons - Top Right Corner */}
-              <Box
-                sx={{
-                  position: 'absolute',
-                  top: 8,
-                  right: 8,
-                  display: 'flex',
-                  gap: 0.5
-                }}
+              <Stack
+                direction="row"
+                spacing={0.75}
+                sx={{ position: 'absolute', top: 10, right: 10 }}
               >
-                {f.isLive && (
-                  <Chip
-                    label="LIVE"
-                    size="small"
-                    color="success"
-                    variant="outlined"
-                    sx={{ height: 20, fontSize: '0.7rem' }}
-                  />
-                )}
-                {f.isPasswordProtected && (
-                  <Chip
-                    label="🔒"
-                    size="small"
-                    color="warning"
-                    variant="outlined"
-                    sx={{ height: 20, fontSize: '0.7rem' }}
-                  />
-                )}
-              </Box>
+                <Chip
+                  label="LIVE"
+                  size="small"
+                  color={f.isLive ? 'success' : 'default'}
+                  variant="outlined"
+                  sx={{
+                    height: 20,
+                    fontSize: '0.7rem',
+                    ...(f.isLive
+                      ? {}
+                      : {
+                          opacity: 0.32,
+                          color: 'grey.400',
+                          borderColor: 'grey.300',
+                          bgcolor: 'transparent',
+                        }),
+                  }}
+                />
+                <Chip
+                  label="🔒"
+                  size="small"
+                  color={f.isPasswordProtected ? 'warning' : 'default'}
+                  variant="outlined"
+                  sx={{
+                    height: 20,
+                    fontSize: '0.7rem',
+                    ...(f.isPasswordProtected
+                      ? {}
+                      : {
+                          opacity: 0.32,
+                          color: 'grey.400',
+                          borderColor: 'grey.300',
+                          bgcolor: 'transparent',
+                        }),
+                  }}
+                />
+              </Stack>
 
-              <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+              <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden', pr: 1 }}>
                 <Typography
                   variant="subtitle1"
                   fontWeight="medium"
@@ -267,7 +280,7 @@ export default function Home() {
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
-                    mb: 0.5
+                    mb: 0.5,
                   }}
                 >
                   {f.path}
@@ -288,75 +301,75 @@ export default function Home() {
                 </Typography>
 
                 {!instanceId ? (
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{ display: 'block', mb: 0.5 }}
-                  >
+                  <Typography variant="body2" color="text.secondary">
                     Loading URL...
                   </Typography>
                 ) : folderUrls[f.guid] ? (
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
-                    <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
-                      <TruncatedText
-                        text={`${folderUrls[f.guid]}`}
-                        variant="body2"
-                        color="primary"
-                        sx={{
-                          fontFamily: 'monospace'
-                        }}
-                      />
-                    </Box>
-                    <Tooltip title="Copy URL">
-                      <IconButton
-                        size="small"
-                        onClick={() => handleCopyUrl(f.guid)}
-                        sx={{ ml: 1, flexShrink: 0 }}
-                      >
-                        <ContentCopyIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Open in Browser">
-                      <IconButton
-                        size="small"
-                        onClick={() => handleOpenInBrowser(f.guid)}
-                        sx={{ ml: 0.5, flexShrink: 0 }}
-                      >
-                        <OpenInNewIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </Box>
-                ) : (
-                  <Typography
+                  <TruncatedText
+                    text={`${folderUrls[f.guid]}`}
                     variant="body2"
-                    color="text.secondary"
-                    sx={{ display: 'block', mb: 0.5 }}
-                  >
+                    color="primary"
+                    sx={{ fontFamily: 'monospace' }}
+                  />
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
                     URL not available
                   </Typography>
                 )}
               </Box>
 
-              {/* Action Buttons */}
-              <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
-                <IconButton
-                  edge="end"
-                  aria-label="edit"
-                  onClick={() => handleEditClick(f)}
-                  disabled={busy}
-                  size="small"
-                >
-                  <EditIcon />
-                </IconButton>
-                <IconButton
-                  edge="end"
-                  aria-label="delete"
-                  onClick={() => handleDeleteClick(f)}
-                  disabled={busy}
-                  size="small"
-                >
-                  <DeleteIcon />
-                </IconButton>
+              <Stack
+                direction="row"
+                spacing={0.5}
+                alignItems="center"
+                sx={{ flexShrink: 0, mt: 3 }}
+              >
+                <Tooltip title="Copy URL">
+                  <span>
+                    <IconButton
+                      size="small"
+                      onClick={() => handleCopyUrl(f.guid)}
+                      disabled={!folderUrls[f.guid]}
+                    >
+                      <ContentCopyIcon fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+                <Tooltip title="Open in Browser">
+                  <span>
+                    <IconButton
+                      size="small"
+                      onClick={() => handleOpenInBrowser(f.guid)}
+                      disabled={!folderUrls[f.guid]}
+                    >
+                      <OpenInNewIcon fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+                <Tooltip title="Edit">
+                  <span>
+                    <IconButton
+                      aria-label="edit"
+                      onClick={() => handleEditClick(f)}
+                      disabled={busy}
+                      size="small"
+                    >
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+                <Tooltip title="Delete">
+                  <span>
+                    <IconButton
+                      aria-label="delete"
+                      onClick={() => handleDeleteClick(f)}
+                      disabled={busy}
+                      size="small"
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
               </Stack>
             </Box>
           ))}

@@ -15,7 +15,6 @@ interface FolderEntry {
 
 interface UserEntry {
   id?: number;
-  username: string;
   email: string;
   fullName: string;
   password: string;
@@ -77,7 +76,7 @@ class Database {
         guid TEXT UNIQUE NOT NULL,
         path TEXT NOT NULL,
         createdAt INTEGER NOT NULL,
-        isLive INTEGER DEFAULT 0,
+        isLive INTEGER DEFAULT 1,
         isPasswordProtected INTEGER DEFAULT 0
       )
     `;
@@ -85,8 +84,7 @@ class Database {
     const createUsersTable = `
       CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE NOT NULL,
-        email TEXT NOT NULL,
+        email TEXT UNIQUE NOT NULL,
         fullName TEXT NOT NULL,
         password TEXT NOT NULL,
         isActive INTEGER DEFAULT 1,
@@ -101,6 +99,35 @@ class Database {
         guid TEXT UNIQUE NOT NULL,
         createdAt INTEGER NOT NULL,
         updatedAt INTEGER NOT NULL
+      )
+    `;
+
+    const createConnectionEventsTable = `
+      CREATE TABLE IF NOT EXISTS connection_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        peerId TEXT NOT NULL,
+        folderId TEXT NOT NULL,
+        createdAt INTEGER NOT NULL
+      )
+    `;
+
+    const createDownloadEventsTable = `
+      CREATE TABLE IF NOT EXISTS download_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        folderId TEXT NOT NULL,
+        relativePath TEXT NOT NULL,
+        bytes INTEGER NOT NULL,
+        createdAt INTEGER NOT NULL
+      )
+    `;
+
+    const createPreviewEventsTable = `
+      CREATE TABLE IF NOT EXISTS preview_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        folderId TEXT NOT NULL,
+        relativePath TEXT NOT NULL,
+        bytes INTEGER NOT NULL,
+        createdAt INTEGER NOT NULL
       )
     `;
 
@@ -132,9 +159,97 @@ class Database {
           }
         });
 
-        resolve();
+        this.db!.run(createConnectionEventsTable, (err: Error | null) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+        });
+
+        this.db!.run(createDownloadEventsTable, (err: Error | null) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+        });
+
+        this.db!.run(createPreviewEventsTable, (err: Error | null) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          this.migrateUsersDropUsername()
+            .then(() => resolve())
+            .catch(reject);
+        });
       });
     });
+  }
+
+  /** Drop legacy username column from existing installs. */
+  private async migrateUsersDropUsername(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'));
+        return;
+      }
+
+      this.db.all('PRAGMA table_info(users)', (err: Error | null, columns: any[]) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+
+        const hasUsername = (columns || []).some((col) => col.name === 'username');
+        if (!hasUsername) {
+          resolve();
+          return;
+        }
+
+        this.db!.serialize(() => {
+          this.db!.run('BEGIN TRANSACTION');
+          this.db!.run(`
+            CREATE TABLE users_new (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              email TEXT UNIQUE NOT NULL,
+              fullName TEXT NOT NULL,
+              password TEXT NOT NULL,
+              isActive INTEGER DEFAULT 1,
+              createdAt INTEGER NOT NULL,
+              updatedAt INTEGER NOT NULL
+            )
+          `);
+          this.db!.run(`
+            INSERT INTO users_new (id, email, fullName, password, isActive, createdAt, updatedAt)
+            SELECT id, email, fullName, password, isActive, createdAt, updatedAt FROM users
+          `);
+          this.db!.run('DROP TABLE users');
+          this.db!.run('ALTER TABLE users_new RENAME TO users', (renameErr: Error | null) => {
+            if (renameErr) {
+              this.db!.run('ROLLBACK');
+              reject(renameErr);
+              return;
+            }
+            this.db!.run('COMMIT', (commitErr: Error | null) => {
+              if (commitErr) reject(commitErr);
+              else resolve();
+            });
+          });
+        });
+      });
+    });
+  }
+
+  private mapUserRow(row: any): UserEntry {
+    return {
+      id: row.id,
+      email: row.email,
+      fullName: row.fullName,
+      password: row.password,
+      isActive: Boolean(row.isActive),
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
   }
 
   async close(): Promise<void> {
@@ -200,15 +315,12 @@ class Database {
       }
 
       this.db.all(
-        'SELECT * FROM users ORDER BY createdAt DESC',
+        'SELECT id, email, fullName, password, isActive, createdAt, updatedAt FROM users ORDER BY createdAt DESC',
         (err: Error | null, rows: any[]) => {
           if (err) {
             reject(err);
           } else {
-            resolve(rows.map((row: any) => ({
-              ...row,
-              isActive: Boolean(row.isActive)
-            })));
+            resolve(rows.map((row: any) => this.mapUserRow(row)));
           }
         }
       );
@@ -224,8 +336,8 @@ class Database {
 
       const now = Date.now();
       this.db.run(
-        'INSERT INTO users (username, email, fullName, password, isActive, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [userData.username, userData.email, userData.fullName, userData.password, userData.isActive ? 1 : 0, now, now],
+        'INSERT INTO users (email, fullName, password, isActive, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)',
+        [userData.email, userData.fullName, userData.password, userData.isActive ? 1 : 0, now, now],
         function(err: Error | null) {
           if (err) {
             reject(err);
@@ -244,7 +356,12 @@ class Database {
         return;
       }
 
-      const fields = Object.keys(updates).filter(key => key !== 'id');
+      const allowed = new Set(['email', 'fullName', 'password', 'isActive']);
+      const fields = Object.keys(updates).filter((key) => allowed.has(key));
+      if (fields.length === 0) {
+        resolve();
+        return;
+      }
       const values = fields.map(field => updates[field as keyof typeof updates]);
       values.push(Date.now()); // updatedAt
       values.push(id);
@@ -286,18 +403,19 @@ class Database {
         return;
       }
 
-      this.db.get('SELECT * FROM users WHERE id = ?', [id], (err: Error | null, row: any) => {
-        if (err) {
-          reject(err);
-        } else if (row) {
-          resolve({
-            ...row,
-            isActive: Boolean(row.isActive)
-          });
-        } else {
-          resolve(undefined);
+      this.db.get(
+        'SELECT id, email, fullName, password, isActive, createdAt, updatedAt FROM users WHERE id = ?',
+        [id],
+        (err: Error | null, row: any) => {
+          if (err) {
+            reject(err);
+          } else if (row) {
+            resolve(this.mapUserRow(row));
+          } else {
+            resolve(undefined);
+          }
         }
-      });
+      );
     });
   }
 
@@ -338,7 +456,7 @@ class Database {
 
       this.db.run(
         'INSERT INTO folders (guid, path, createdAt, isLive, isPasswordProtected) VALUES (?, ?, ?, ?, ?)',
-        [g, path, now, 0, 0],
+        [g, path, now, 1, 0],
         function(err: Error | null) {
           if (err) {
             reject(err);
@@ -430,6 +548,231 @@ class Database {
     } catch (error) {
       return { error: error instanceof Error ? error.message : 'Unknown error' };
     }
+  }
+
+  async recordConnectionEvent(peerId: string, folderId: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'));
+        return;
+      }
+      this.db.run(
+        'INSERT INTO connection_events (peerId, folderId, createdAt) VALUES (?, ?, ?)',
+        [peerId, folderId, Date.now()],
+        (err: Error | null) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+  }
+
+  async recordDownloadEvent(
+    folderId: string,
+    relativePath: string,
+    bytes: number
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'));
+        return;
+      }
+      this.db.run(
+        'INSERT INTO download_events (folderId, relativePath, bytes, createdAt) VALUES (?, ?, ?, ?)',
+        [folderId, relativePath, Math.max(0, Math.floor(bytes)), Date.now()],
+        (err: Error | null) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+  }
+
+  async recordPreviewEvent(
+    folderId: string,
+    relativePath: string,
+    bytes: number
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'));
+        return;
+      }
+      this.db.run(
+        'INSERT INTO preview_events (folderId, relativePath, bytes, createdAt) VALUES (?, ?, ?, ?)',
+        [folderId, relativePath, Math.max(0, Math.floor(bytes)), Date.now()],
+        (err: Error | null) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+  }
+
+  async getStatsSummary(days = 14): Promise<{
+    folders: { total: number; live: number; passwordProtected: number };
+    users: { total: number; active: number };
+    connections7d: number;
+    downloads7d: number;
+    bytes7d: number;
+    previews7d: number;
+    previewBytes7d: number;
+    connectionsByDay: Array<{ date: string; count: number }>;
+    downloadsByDay: Array<{ date: string; count: number; bytes: number }>;
+    previewsByDay: Array<{ date: string; count: number; bytes: number }>;
+  }> {
+    const folders = await this.listFolders();
+    const users = await this.listUsers();
+    const dayMs = 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    const start14 = now - days * dayMs;
+    const start7 = now - 7 * dayMs;
+
+    const dayKeys: string[] = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(now - i * dayMs);
+      dayKeys.push(d.toISOString().slice(0, 10));
+    }
+
+    const connections = await this.queryAll<{ createdAt: number }>(
+      'SELECT createdAt FROM connection_events WHERE createdAt >= ?',
+      [start14]
+    );
+    const downloads = await this.queryAll<{ createdAt: number; bytes: number }>(
+      'SELECT createdAt, bytes FROM download_events WHERE createdAt >= ?',
+      [start14]
+    );
+    const previews = await this.queryAll<{ createdAt: number; bytes: number }>(
+      'SELECT createdAt, bytes FROM preview_events WHERE createdAt >= ?',
+      [start14]
+    );
+
+    const connMap = new Map(dayKeys.map((k) => [k, 0]));
+    const dlCountMap = new Map(dayKeys.map((k) => [k, 0]));
+    const dlBytesMap = new Map(dayKeys.map((k) => [k, 0]));
+    const pvCountMap = new Map(dayKeys.map((k) => [k, 0]));
+    const pvBytesMap = new Map(dayKeys.map((k) => [k, 0]));
+
+    let connections7d = 0;
+    let downloads7d = 0;
+    let bytes7d = 0;
+    let previews7d = 0;
+    let previewBytes7d = 0;
+
+    for (const row of connections) {
+      const key = new Date(row.createdAt).toISOString().slice(0, 10);
+      if (connMap.has(key)) connMap.set(key, (connMap.get(key) || 0) + 1);
+      if (row.createdAt >= start7) connections7d += 1;
+    }
+
+    for (const row of downloads) {
+      const key = new Date(row.createdAt).toISOString().slice(0, 10);
+      if (dlCountMap.has(key)) {
+        dlCountMap.set(key, (dlCountMap.get(key) || 0) + 1);
+        dlBytesMap.set(key, (dlBytesMap.get(key) || 0) + (row.bytes || 0));
+      }
+      if (row.createdAt >= start7) {
+        downloads7d += 1;
+        bytes7d += row.bytes || 0;
+      }
+    }
+
+    for (const row of previews) {
+      const key = new Date(row.createdAt).toISOString().slice(0, 10);
+      if (pvCountMap.has(key)) {
+        pvCountMap.set(key, (pvCountMap.get(key) || 0) + 1);
+        pvBytesMap.set(key, (pvBytesMap.get(key) || 0) + (row.bytes || 0));
+      }
+      if (row.createdAt >= start7) {
+        previews7d += 1;
+        previewBytes7d += row.bytes || 0;
+      }
+    }
+
+    return {
+      folders: {
+        total: folders.length,
+        live: folders.filter((f) => f.isLive).length,
+        passwordProtected: folders.filter((f) => f.isPasswordProtected).length,
+      },
+      users: {
+        total: users.length,
+        active: users.filter((u) => u.isActive).length,
+      },
+      connections7d,
+      downloads7d,
+      bytes7d,
+      previews7d,
+      previewBytes7d,
+      connectionsByDay: dayKeys.map((date) => ({
+        date,
+        count: connMap.get(date) || 0,
+      })),
+      downloadsByDay: dayKeys.map((date) => ({
+        date,
+        count: dlCountMap.get(date) || 0,
+        bytes: dlBytesMap.get(date) || 0,
+      })),
+      previewsByDay: dayKeys.map((date) => ({
+        date,
+        count: pvCountMap.get(date) || 0,
+        bytes: pvBytesMap.get(date) || 0,
+      })),
+    };
+  }
+
+  async getRecentActivity(limit = 50): Promise<
+    Array<{
+      type: 'connection' | 'download' | 'preview';
+      detail: string;
+      folderId: string;
+      bytes: number;
+      createdAt: number;
+    }>
+  > {
+    const rows = await this.queryAll<{
+      type: string;
+      detail: string;
+      folderId: string;
+      bytes: number;
+      createdAt: number;
+    }>(
+      `
+      SELECT type, detail, folderId, bytes, createdAt FROM (
+        SELECT 'connection' AS type, peerId AS detail, folderId, 0 AS bytes, createdAt
+        FROM connection_events
+        UNION ALL
+        SELECT 'download' AS type, relativePath AS detail, folderId, bytes, createdAt
+        FROM download_events
+        UNION ALL
+        SELECT 'preview' AS type, relativePath AS detail, folderId, bytes, createdAt
+        FROM preview_events
+      )
+      ORDER BY createdAt DESC
+      LIMIT ?
+      `,
+      [limit]
+    );
+    return rows.map((row) => ({
+      type: row.type as 'connection' | 'download' | 'preview',
+      detail: row.detail,
+      folderId: row.folderId,
+      bytes: Number(row.bytes) || 0,
+      createdAt: row.createdAt,
+    }));
+  }
+
+  private queryAll<T>(sql: string, params: any[] = []): Promise<T[]> {
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'));
+        return;
+      }
+      this.db.all(sql, params, (err: Error | null, rows: any[]) => {
+        if (err) reject(err);
+        else resolve((rows || []) as T[]);
+      });
+    });
   }
 
   private generateGuid(): string {

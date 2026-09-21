@@ -63,6 +63,43 @@ declare global {
       dbRemoveFolder: (id: number) => Promise<{ success: boolean }>;
       dbUpdateFolder: (id: number, updates: any) => Promise<{ success: boolean }>;
       dbDebug: () => Promise<any>;
+      dbGetStatsSummary: (days?: number) => Promise<{
+        folders: { total: number; live: number; passwordProtected: number };
+        users: { total: number; active: number };
+        connections7d: number;
+        downloads7d: number;
+        bytes7d: number;
+        previews7d: number;
+        previewBytes7d: number;
+        connectionsByDay: Array<{ date: string; count: number }>;
+        downloadsByDay: Array<{ date: string; count: number; bytes: number }>;
+        previewsByDay: Array<{ date: string; count: number; bytes: number }>;
+        liveSessions: Array<{
+          id: string;
+          peerId: string;
+          folderId: string;
+          folderPath?: string;
+          connectedAt: number;
+        }>;
+        recentActivity: Array<{
+          type: 'connection' | 'download' | 'preview';
+          detail: string;
+          folderId: string;
+          bytes: number;
+          createdAt: number;
+        }>;
+      }>;
+      recordDownloadEvent: (
+        folderId: string,
+        relativePath: string,
+        bytes: number
+      ) => Promise<{ success: boolean }>;
+      recordPreviewEvent: (
+        folderId: string,
+        relativePath: string,
+        bytes: number
+      ) => Promise<{ success: boolean }>;
+      onStatsUpdated: (callback: (data: { at: number }) => void) => void;
     };
   }
 }

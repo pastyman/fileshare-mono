@@ -29,7 +29,6 @@ import EditIcon from '@mui/icons-material/Edit';
 // Database types and operations now handled via IPC
 interface UserEntry {
   id?: number;
-  username: string;
   email: string;
   fullName: string;
   password: string;
@@ -48,7 +47,6 @@ export default function UsersPage() {
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [editingUser, setEditingUser] = React.useState<UserEntry | null>(null);
   const [userForm, setUserForm] = React.useState({
-    username: '',
     email: '',
     fullName: '',
     password: '',
@@ -105,27 +103,27 @@ export default function UsersPage() {
     refresh();
   }, [refresh]);
 
+  const emptyForm = () => ({
+    email: '',
+    fullName: '',
+    password: '',
+    isActive: true
+  });
+
   const handleAddClick = () => {
     setEditingUser(null);
-    setEmailError(null); // Clear any previous email errors
-    setUserForm({
-      username: '',
-      email: '',
-      fullName: '',
-      password: '',
-      isActive: true
-    });
+    setEmailError(null);
+    setUserForm(emptyForm());
     setDialogOpen(true);
   };
 
   const handleEditClick = (user: UserEntry) => {
     setEditingUser(user);
-    setEmailError(null); // Clear any previous email errors
+    setEmailError(null);
     setUserForm({
-      username: user.username,
       email: user.email,
       fullName: user.fullName,
-      password: '', // Password is not editable
+      password: '',
       isActive: user.isActive
     });
     setDialogOpen(true);
@@ -135,33 +133,24 @@ export default function UsersPage() {
     setDialogOpen(false);
     setEditingUser(null);
     setEmailError(null);
-    setUserForm({
-      username: '',
-      email: '',
-      fullName: '',
-      password: '',
-      isActive: true
-    });
+    setUserForm(emptyForm());
   };
 
   const handleSave = async () => {
-    // Clear previous errors
     setError(null);
     setEmailError(null);
 
-    if (!userForm.username.trim() || !userForm.email.trim() || !userForm.fullName.trim()) {
-      setError('All fields are required');
+    if (!userForm.email.trim() || !userForm.fullName.trim()) {
+      setError('Name and email are required');
       return;
     }
 
-    // Validate email format
     const emailValidation = validateEmail(userForm.email.trim());
     if (!emailValidation.isValid) {
       setEmailError(emailValidation.error || 'Please enter a valid email address');
       return;
     }
 
-    // Password is required for new users, but not for editing existing users
     if (!editingUser && !userForm.password.trim()) {
       setError('Password is required for new users');
       return;
@@ -170,7 +159,6 @@ export default function UsersPage() {
     setBusy(true);
     try {
       if (editingUser) {
-        // For editing, only update non-password fields
         const { password, ...updateData } = userForm;
         await window.electronAPI.dbUpdateUser(editingUser.id!, updateData);
       } else {
@@ -303,10 +291,7 @@ export default function UsersPage() {
                 secondary={
                   <Stack spacing={0.5}>
                     <Typography variant="body2" color="text.secondary">
-                      Username: {user.username}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Email: {user.email}
+                      {user.email}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
                       Created: {new Date(user.createdAt).toLocaleDateString()}
@@ -330,14 +315,14 @@ export default function UsersPage() {
         <DialogContent>
           <Stack spacing={3} sx={{ mt: 1 }}>
             <TextField
-              label="Username"
-              value={userForm.username}
-              onChange={(e) => setUserForm(prev => ({ ...prev, username: e.target.value }))}
+              label="Name"
+              value={userForm.fullName}
+              onChange={(e) => setUserForm(prev => ({ ...prev, fullName: e.target.value }))}
               fullWidth
               required
               disabled={busy}
             />
-            
+
             <TextField
               label="Email"
               type="email"
@@ -345,11 +330,9 @@ export default function UsersPage() {
               onChange={(e) => {
                 const email = e.target.value;
                 setUserForm(prev => ({ ...prev, email }));
-                // Clear email error when user starts typing
                 if (emailError) {
                   setEmailError(null);
                 }
-                // Real-time validation (optional - you can remove this if you prefer validation only on save)
                 if (email) {
                   const validation = validateEmail(email);
                   if (!validation.isValid) {
@@ -364,15 +347,6 @@ export default function UsersPage() {
               disabled={busy}
               error={!!emailError}
               helperText={emailError || "Enter a valid email address (e.g., user@example.com)"}
-            />
-            
-            <TextField
-              label="Full Name"
-              value={userForm.fullName}
-              onChange={(e) => setUserForm(prev => ({ ...prev, fullName: e.target.value }))}
-              fullWidth
-              required
-              disabled={busy}
             />
             
             <TextField
@@ -411,7 +385,7 @@ export default function UsersPage() {
         <DialogTitle>Confirm Delete</DialogTitle>
         <DialogContent>
           <Typography variant="body2">
-            Are you sure you want to delete user "{userToDelete?.fullName}" ({userToDelete?.username})? This action cannot be undone.
+            Are you sure you want to delete user "{userToDelete?.fullName}" ({userToDelete?.email})? This action cannot be undone.
           </Typography>
         </DialogContent>
         <DialogActions>

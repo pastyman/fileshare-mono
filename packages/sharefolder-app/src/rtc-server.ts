@@ -133,7 +133,7 @@ async function sendImageThumbnailOrOriginal(
   rtcSend: (message: ArrayBuffer) => void,
   rtcBufferedAmount: () => number | null,
   cancelled: () => boolean
-) {
+): Promise<number> {
   const thumb = await window.electronAPI!.getImageThumbnail(
     folderPath,
     relativePath,
@@ -151,7 +151,7 @@ async function sendImageThumbnailOrOriginal(
       rtcBufferedAmount,
       cancelled
     );
-    return;
+    return thumb.byteLength;
   }
 
   logToDom(`Thumbnail unavailable for ${relativePath}; sending original`);
@@ -164,6 +164,7 @@ async function sendImageThumbnailOrOriginal(
     rtcBufferedAmount,
     cancelled
   );
+  return fileSize;
 }
 
 async function registerHost(
@@ -340,7 +341,7 @@ document.addEventListener('DOMContentLoaded', () => {
           cancelledRequests.delete(requestID);
 
           if (thumbWidth > 0) {
-            await sendImageThumbnailOrOriginal(
+            const previewBytes = await sendImageThumbnailOrOriginal(
               folderPath,
               relativePath,
               requestID,
@@ -350,8 +351,33 @@ document.addEventListener('DOMContentLoaded', () => {
               rtcClient.bufferedAmount,
               () => cancelledRequests.has(requestID)
             );
+            if (
+              previewBytes > 0 &&
+              !cancelledRequests.has(requestID) &&
+              window.electronAPI?.recordPreviewEvent
+            ) {
+              try {
+                await window.electronAPI.recordPreviewEvent(
+                  folderId,
+                  relativePath,
+                  previewBytes
+                );
+              } catch (err) {
+                logToDom(
+                  `Failed to record preview stats: ${
+                    err instanceof Error ? err.message : String(err)
+                  }`
+                );
+              }
+            }
             return;
           }
+
+          const fullSize = fileSize || currentFiles[fileIndex]?.size || 0;
+          const isFullFile =
+            range.startPos === 0 &&
+            fullSize > 0 &&
+            range.endPos >= fullSize;
 
           logToDom(
             `Sending ${relativePath} bytes ${range.startPos}-${range.endPos}`
@@ -365,6 +391,26 @@ document.addEventListener('DOMContentLoaded', () => {
             rtcClient.bufferedAmount,
             () => cancelledRequests.has(requestID)
           );
+
+          if (
+            isFullFile &&
+            !cancelledRequests.has(requestID) &&
+            window.electronAPI?.recordDownloadEvent
+          ) {
+            try {
+              await window.electronAPI.recordDownloadEvent(
+                folderId,
+                relativePath,
+                fullSize
+              );
+            } catch (err) {
+              logToDom(
+                `Failed to record download stats: ${
+                  err instanceof Error ? err.message : String(err)
+                }`
+              );
+            }
+          }
         }
 
         if (header.type === 'cancel') {

@@ -20,6 +20,7 @@ import HomeIcon from "@mui/icons-material/Home";
 import InfoIcon from "@mui/icons-material/Info";
 import SettingsIcon from "@mui/icons-material/Settings";
 import PeopleIcon from "@mui/icons-material/People";
+import BarChartIcon from "@mui/icons-material/BarChart";
 import MenuIcon from "@mui/icons-material/Menu";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import LightModeIcon from "@mui/icons-material/LightMode";
@@ -29,6 +30,7 @@ import HomePage from "./pages/Home";
 import AboutPage from "./pages/About";
 import SettingsPage from "./pages/Settings";
 import UsersPage from "./pages/Users";
+import StatsPage from "./pages/Stats";
 import ConnectionStatus from "./components/ConnectionStatus";
 import { HashRouter, Navigate } from "react-router-dom";
 import { createAppTheme } from "./theme";
@@ -102,6 +104,7 @@ function NavList({ open }: { open: boolean }) {
   const items = [
     { to: "/", label: "Folders", icon: <HomeIcon /> },
     { to: "/users", label: "Users", icon: <PeopleIcon /> },
+    { to: "/stats", label: "Stats", icon: <BarChartIcon /> },
     { to: "/about", label: "About", icon: <InfoIcon /> },
     { to: "/settings", label: "Settings", icon: <SettingsIcon /> },
   ];
@@ -252,6 +255,7 @@ function Shell() {
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/users" element={<UsersPage />} />
+            <Route path="/stats" element={<StatsPage />} />
             <Route path="/about" element={<AboutPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />

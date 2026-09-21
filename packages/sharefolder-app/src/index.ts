@@ -1,3 +1,18 @@
+// Broken stdout/stderr pipes (e.g. parent terminal closed) throw EPIPE on console.log
+// and Electron shows an "A JavaScript error occurred in the main process" dialog.
+function ignoreBrokenPipe(stream: NodeJS.WriteStream | null | undefined) {
+  stream?.on?.('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'EPIPE' || err.code === 'ERR_STREAM_DESTROYED') return;
+    throw err;
+  });
+}
+ignoreBrokenPipe(process.stdout);
+ignoreBrokenPipe(process.stderr);
+process.on('uncaughtException', (err: NodeJS.ErrnoException) => {
+  if (err?.code === 'EPIPE' || err?.code === 'ERR_STREAM_DESTROYED') return;
+  console.error('Uncaught exception in main process:', err);
+});
+
 import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell } from 'electron';
 import * as path from 'path';
 import * as fsp from 'fs/promises';
@@ -53,6 +68,37 @@ if (require('electron-squirrel-startup')) {
 let mainWindow: BrowserWindow | null = null;
 let connectionPollingInterval: NodeJS.Timeout | null = null;
 let instanceGuid: string | null = null;
+
+type LiveSession = {
+  id: string;
+  peerId: string;
+  folderId: string;
+  folderPath?: string;
+  connectedAt: number;
+};
+
+const liveSessions = new Map<string, LiveSession>();
+
+function sendToMainWindow(channel: string, payload: unknown) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  try {
+    mainWindow.webContents.send(channel, payload);
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException)?.code;
+    if (code === 'EPIPE' || code === 'ERR_STREAM_DESTROYED') return;
+    console.error(`Failed to send ${channel}:`, err);
+  }
+}
+
+function notifyStatsUpdated() {
+  sendToMainWindow('stats-updated', { at: Date.now() });
+}
+
+function listLiveSessions(): LiveSession[] {
+  return Array.from(liveSessions.values()).sort(
+    (a, b) => b.connectedAt - a.connectedAt
+  );
+}
 
 const createWindow = (): void => {
   // Create the browser window.
@@ -121,6 +167,16 @@ function closeRtcWindow(win: BrowserWindow) {
 function openRTCWindow(peerId: string, folderId: string, folderPath?: string) {
   console.log(`Opening RTC host for folder: ${folderId} (${folderPath || 'path unknown'}), peer: ${peerId}`);
 
+  const sessionId = `${peerId}:${folderId}:${Date.now()}`;
+  liveSessions.set(sessionId, {
+    id: sessionId,
+    peerId,
+    folderId,
+    folderPath,
+    connectedAt: Date.now(),
+  });
+  notifyStatsUpdated();
+
   const rtcWindow = new BrowserWindow({
     width: 800,
     height: 600,
@@ -136,11 +192,18 @@ function openRTCWindow(peerId: string, folderId: string, folderPath?: string) {
   rtcWindow.loadURL(RTC_SERVER_WEBPACK_ENTRY);
   rtcWindow.webContents.openDevTools({ mode: 'detach' });
 
+  const clearSession = () => {
+    if (liveSessions.delete(sessionId)) {
+      notifyStatsUpdated();
+    }
+  };
+
   rtcWindow.on('close', () => {
     if (!rtcWindow.isDestroyed() && rtcWindow.webContents.isDevToolsOpened()) {
       rtcWindow.webContents.closeDevTools();
     }
   });
+  rtcWindow.on('closed', clearSession);
 
   rtcWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
     console.log(`Failed to load ${validatedURL}: ${errorDescription} (${errorCode})`);
@@ -175,6 +238,15 @@ async function checkConnectionStatus() {
         console.log(`🔗 Found ${data.connections.length} new connection(s)`);
         data.connections.forEach(async (connection: any) => {
           try {
+            try {
+              await database.recordConnectionEvent(
+                connection.peerId,
+                connection.folderId
+              );
+              notifyStatsUpdated();
+            } catch (statsErr) {
+              console.error('Failed to record connection event:', statsErr);
+            }
             const folder = await database.getFolderByGuid(connection.folderId);
             const folderPath = folder ? folder.path : undefined;
             if (!folderPath) {
@@ -189,14 +261,14 @@ async function checkConnectionStatus() {
       }
       
       // Send connection status update with connections data
-      mainWindow?.webContents.send('connection-status-update', {
+      sendToMainWindow('connection-status-update', {
         status: 'connected',
         lastCheck: new Date().toISOString(),
         connections: data.connections || []
       });
     } else {
       console.log(`❌ Connection polling failed with HTTP ${response.status}`);
-      mainWindow?.webContents.send('connection-status-update', {
+      sendToMainWindow('connection-status-update', {
         status: 'disconnected',
         lastCheck: new Date().toISOString(),
         error: `HTTP ${response.status}`
@@ -205,7 +277,7 @@ async function checkConnectionStatus() {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.log('💥 Connection polling error:', errorMessage);
-    mainWindow?.webContents.send('connection-status-update', {
+    sendToMainWindow('connection-status-update', {
       status: 'error',
       lastCheck: new Date().toISOString(),
       error: errorMessage
@@ -540,6 +612,59 @@ app.whenReady().then(() => {
       throw error;
     }
   });
+
+  ipcMain.handle('db-get-stats-summary', async (_event, days = 14) => {
+    try {
+      const summary = await database.getStatsSummary(Number(days) || 14);
+      const recentActivity = await database.getRecentActivity(60);
+      return {
+        ...summary,
+        liveSessions: listLiveSessions(),
+        recentActivity,
+      };
+    } catch (error) {
+      console.error('Failed to get stats summary:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle(
+    'db-record-download-event',
+    async (
+      _event,
+      folderId: string,
+      relativePath: string,
+      bytes: number
+    ) => {
+      try {
+        await database.recordDownloadEvent(folderId, relativePath, bytes);
+        notifyStatsUpdated();
+        return { success: true };
+      } catch (error) {
+        console.error('Failed to record download event:', error);
+        throw error;
+      }
+    }
+  );
+
+  ipcMain.handle(
+    'db-record-preview-event',
+    async (
+      _event,
+      folderId: string,
+      relativePath: string,
+      bytes: number
+    ) => {
+      try {
+        await database.recordPreviewEvent(folderId, relativePath, bytes);
+        notifyStatsUpdated();
+        return { success: true };
+      } catch (error) {
+        console.error('Failed to record preview event:', error);
+        throw error;
+      }
+    }
+  );
 
   ipcMain.handle(
     'list-dir',
