@@ -1,11 +1,8 @@
 // src/renderer/config.ts
 
 export function getFolderWebUrl(instanceId: string, folderId: string): string {
-  if (process.env.NODE_ENV === 'development' || DEV_WEB_BASE) {
-    const base = (DEV_WEB_BASE || 'http://localhost:3010').replace(/\/$/, '');
-    return `${base}/${instanceId}/${folderId}`;
-  }
-  return `https://sharefolder.io/${instanceId}/${folderId}`;
+  const base = (DEV_WEB_BASE || 'https://sharefolder.io').replace(/\/$/, '');
+  return `${base}/${instanceId}/${folderId}`;
 }
 
 export const CONNECTION_CONFIG = {

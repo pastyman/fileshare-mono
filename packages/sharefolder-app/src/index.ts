@@ -182,9 +182,15 @@ function openRTCWindow(
   });
   notifyStatsUpdated();
 
+  // Hidden by default; set SHOW_RTC_WINDOWS=1 for host window + DevTools debugging.
+  const showRtcDebugWindow = ['1', 'true', 'yes'].includes(
+    String(process.env.SHOW_RTC_WINDOWS || '').toLowerCase()
+  );
+
   const rtcWindow = new BrowserWindow({
     width: 800,
     height: 600,
+    show: showRtcDebugWindow,
     title: `ShareFolder Host - ${folderId}`,
     webPreferences: {
       nodeIntegration: false,
@@ -195,7 +201,9 @@ function openRTCWindow(
   });
 
   rtcWindow.loadURL(RTC_SERVER_WEBPACK_ENTRY);
-  rtcWindow.webContents.openDevTools({ mode: 'detach' });
+  if (showRtcDebugWindow) {
+    rtcWindow.webContents.openDevTools({ mode: 'detach' });
+  }
 
   const clearSession = () => {
     if (liveSessions.delete(sessionId)) {
@@ -451,8 +459,10 @@ app.whenReady().then(() => {
     setDevSignalingBase(
       process.env.SIGNALING_BASE || connectionsEndpoint.replace(/\/connections\/?$/, '')
     );
-    setDevWebBase(process.env.WEB_BASE || 'http://localhost:3010');
-    console.log(`Development mode: API ${getConnectionEndpoint()}, signaling ${getSignalingBaseUrl()}`);
+    setDevWebBase(process.env.WEB_BASE || 'https://sharefolder.io');
+    console.log(
+      `Development mode: API ${getConnectionEndpoint()}, signaling ${getSignalingBaseUrl()}, web ${process.env.WEB_BASE || 'https://sharefolder.io'}`
+    );
   }
   
   // IPC: open directory dialog
