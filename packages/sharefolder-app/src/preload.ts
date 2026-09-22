@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     folderId: string;
     folderPath: string;
     signalingBaseUrl: string;
+    isPasswordProtected?: boolean;
   }) => void) => {
     ipcRenderer.on('rtc-connection-info', (_event, data) => callback(data));
   },
@@ -81,6 +82,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   dbGetUser: async (id: number): Promise<any> => {
     return ipcRenderer.invoke('db-get-user', id);
+  },
+  dbAuthenticateUser: async (
+    email: string,
+    password: string
+  ): Promise<{ id: number; email: string; fullName: string } | null> => {
+    return ipcRenderer.invoke('db-authenticate-user', email, password);
   },
   dbListFolders: async (): Promise<any[]> => {
     return ipcRenderer.invoke('db-list-folders');

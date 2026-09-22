@@ -20,6 +20,7 @@ declare global {
         folderId: string;
         folderPath: string;
         signalingBaseUrl: string;
+        isPasswordProtected?: boolean;
       }) => void) => void;
       closeRtcWindow: () => void;
       sendNewConnections: (connections: Array<{ peerId: string; folderId: string }>) => void;
@@ -58,6 +59,10 @@ declare global {
       dbUpdateUser: (id: number, updates: any) => Promise<{ success: boolean }>;
       dbRemoveUser: (id: number) => Promise<{ success: boolean }>;
       dbGetUser: (id: number) => Promise<any>;
+      dbAuthenticateUser: (
+        email: string,
+        password: string
+      ) => Promise<{ id: number; email: string; fullName: string } | null>;
       dbListFolders: () => Promise<any[]>;
       dbAddFolder: (path: string, guid?: string) => Promise<number>;
       dbRemoveFolder: (id: number) => Promise<{ success: boolean }>;

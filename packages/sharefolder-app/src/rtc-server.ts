@@ -19,6 +19,7 @@ type RTCConnectionInfo = {
   folderId: string;
   folderPath: string;
   signalingBaseUrl: string;
+  isPasswordProtected?: boolean;
 };
 
 const logToDom = (message: string) => {
@@ -217,10 +218,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
   window.electronAPI.onRTCConnectionInfo(async (info: RTCConnectionInfo) => {
     try {
-      const { peerId, folderId, folderPath, signalingBaseUrl } = info;
+      const {
+        peerId,
+        folderId,
+        folderPath,
+        signalingBaseUrl,
+        isPasswordProtected = false,
+      } = info;
       logToDom(`Peer ${peerId} requested folder ${folderId}`);
       logToDom(`Path: ${folderPath}`);
       logToDom(`Signaling: ${signalingBaseUrl}`);
+      if (isPasswordProtected) {
+        logToDom('Folder is password-protected — auth required before browse');
+      }
 
       if (!folderPath || folderPath === 'Path not available') {
         logToDom('ERROR: folder path missing');
@@ -243,8 +253,37 @@ document.addEventListener('DOMContentLoaded', () => {
       const cancelledRequests = new Set<number>();
       let currentFiles: DirEntry[] = [];
       const PAGE_SIZE = 100;
+      let authenticated = !isPasswordProtected;
+
+      const sendAuthRequired = () => {
+        rtcClient.send(
+          encodeChunkWithHeader({
+            type: 'authRequired',
+            data: {},
+          })
+        );
+      };
+
+      const sendAuthResult = (
+        ok: boolean,
+        message?: string,
+        user?: { email: string; fullName: string }
+      ) => {
+        rtcClient.send(
+          encodeChunkWithHeader({
+            type: ok ? 'authOk' : 'authFail',
+            data: ok
+              ? { email: user?.email, fullName: user?.fullName }
+              : { message: message || 'Invalid email or password' },
+          })
+        );
+      };
 
       const loadAndSendDir = async (relativePath: string, offset = 0) => {
+        if (!authenticated) {
+          sendAuthRequired();
+          return;
+        }
         const page = await window.electronAPI!.listDir(
           folderPath,
           relativePath,
@@ -287,6 +326,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const onConnectionSuccess = async () => {
         handshakeServer.close();
+        if (!authenticated) {
+          logToDom('RTC connected — requesting login');
+          sendAuthRequired();
+          return;
+        }
         logToDom('RTC connected — waiting briefly, then sending root listing');
         // Give the browser a moment to request listDir after connection-success.
         await sleep(250);
@@ -303,6 +347,45 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const onMessageRecieved = async (data: any) => {
         const { header } = decodeChunkWithHeader(data);
+
+        if (header.type === 'auth') {
+          const email = String(header.data?.email || '');
+          const password = String(header.data?.password || '');
+          try {
+            const user = await window.electronAPI!.dbAuthenticateUser(
+              email,
+              password
+            );
+            if (!user) {
+              logToDom(`Auth failed for ${email || '(empty)'}`);
+              sendAuthResult(false);
+              return;
+            }
+            authenticated = true;
+            logToDom(`Auth ok: ${user.email}`);
+            sendAuthResult(true, undefined, {
+              email: user.email,
+              fullName: user.fullName,
+            });
+          } catch (err) {
+            logToDom(
+              `Auth error: ${err instanceof Error ? err.message : String(err)}`
+            );
+            sendAuthResult(false, 'Authentication failed');
+          }
+          return;
+        }
+
+        if (!authenticated) {
+          if (
+            header.type === 'listDir' ||
+            header.type === 'file-send' ||
+            header.type === 'cancel'
+          ) {
+            sendAuthRequired();
+          }
+          return;
+        }
 
         if (header.type === 'listDir') {
           const reqPath = (header.data?.path as string) || '';

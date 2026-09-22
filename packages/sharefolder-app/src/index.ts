@@ -164,7 +164,12 @@ function closeRtcWindow(win: BrowserWindow) {
   }
 }
 
-function openRTCWindow(peerId: string, folderId: string, folderPath?: string) {
+function openRTCWindow(
+  peerId: string,
+  folderId: string,
+  folderPath?: string,
+  isPasswordProtected = false
+) {
   console.log(`Opening RTC host for folder: ${folderId} (${folderPath || 'path unknown'}), peer: ${peerId}`);
 
   const sessionId = `${peerId}:${folderId}:${Date.now()}`;
@@ -216,6 +221,7 @@ function openRTCWindow(peerId: string, folderId: string, folderPath?: string) {
       folderId,
       folderPath: folderPath || 'Path not available',
       signalingBaseUrl: getSignalingBaseUrl(),
+      isPasswordProtected,
     });
   });
 }
@@ -249,10 +255,16 @@ async function checkConnectionStatus() {
             }
             const folder = await database.getFolderByGuid(connection.folderId);
             const folderPath = folder ? folder.path : undefined;
+            const isPasswordProtected = Boolean(folder?.isPasswordProtected);
             if (!folderPath) {
               console.log(`Could not get folder path for GUID ${connection.folderId}, opening without path`);
             }
-            openRTCWindow(connection.peerId, connection.folderId, folderPath);
+            openRTCWindow(
+              connection.peerId,
+              connection.folderId,
+              folderPath,
+              isPasswordProtected
+            );
           } catch (error) {
             console.error(`Failed to open RTC for folder ${connection.folderId}:`, error);
             openRTCWindow(connection.peerId, connection.folderId);
@@ -556,6 +568,18 @@ app.whenReady().then(() => {
       throw error;
     }
   });
+
+  ipcMain.handle(
+    'db-authenticate-user',
+    async (_event, email: string, password: string) => {
+      try {
+        return await database.authenticateUser(email, password);
+      } catch (error) {
+        console.error('Failed to authenticate user:', error);
+        throw error;
+      }
+    }
+  );
 
   ipcMain.handle('db-list-folders', async () => {
     try {

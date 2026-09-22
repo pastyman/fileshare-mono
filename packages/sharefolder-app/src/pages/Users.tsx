@@ -159,8 +159,15 @@ export default function UsersPage() {
     setBusy(true);
     try {
       if (editingUser) {
-        const { password, ...updateData } = userForm;
-        await window.electronAPI.dbUpdateUser(editingUser.id!, updateData);
+        const updates: Partial<UserEntry> = {
+          email: userForm.email,
+          fullName: userForm.fullName,
+          isActive: userForm.isActive,
+        };
+        if (userForm.password.trim()) {
+          updates.password = userForm.password;
+        }
+        await window.electronAPI.dbUpdateUser(editingUser.id!, updates);
       } else {
         await window.electronAPI.dbAddUser(userForm);
       }

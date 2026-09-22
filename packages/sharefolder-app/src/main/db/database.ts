@@ -419,6 +419,47 @@ class Database {
     });
   }
 
+  /** Verify an active user by email + password. Returns identity without the password. */
+  async authenticateUser(
+    email: string,
+    password: string
+  ): Promise<{ id: number; email: string; fullName: string } | null> {
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'));
+        return;
+      }
+
+      const normalized = email.trim().toLowerCase();
+      if (!normalized || !password) {
+        resolve(null);
+        return;
+      }
+
+      this.db.get(
+        `SELECT id, email, fullName, password, isActive
+         FROM users
+         WHERE lower(email) = ? AND isActive = 1`,
+        [normalized],
+        (err: Error | null, row: any) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          if (!row || row.password !== password) {
+            resolve(null);
+            return;
+          }
+          resolve({
+            id: row.id,
+            email: row.email,
+            fullName: row.fullName,
+          });
+        }
+      );
+    });
+  }
+
   // Folder CRUD operations
   async listFolders(): Promise<FolderEntry[]> {
     return new Promise((resolve, reject) => {
