@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { getORMi } from 'orm';
-import type { IceResponse } from 'types';
 
 export function getMongoUri(): string {
   const uri = process.env.MONGODB_URI;
@@ -13,29 +12,6 @@ export function getMongoUri(): string {
 export function getOrm() {
   return getORMi(getMongoUri());
 }
-
-export const ICE_SERVERS: IceResponse = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
-    {
-      urls: 'turn:openrelay.metered.ca:80',
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
-    },
-    {
-      urls: 'turn:openrelay.metered.ca:443',
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
-    },
-    {
-      urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
-    },
-  ],
-};
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',

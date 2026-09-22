@@ -50,3 +50,7 @@ Thumbs.db
 !.env.example
 !**/env.example
 
+# Electron Forge output
+packages/sharefolder-app/out
+release-assets
+
