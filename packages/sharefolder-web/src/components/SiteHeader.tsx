@@ -22,14 +22,31 @@ export function SiteHeader() {
           ShareFolder
         </Link>
 
-        {isShareRoute && (
-          <Link
-            href="/"
-            className="text-sm font-medium text-[var(--sf-ink-muted)] transition-colors hover:text-[var(--sf-ink)]"
-          >
-            Home
-          </Link>
-        )}
+        <nav className="flex items-center gap-5 text-sm font-medium">
+          {isHome ? (
+            <a
+              href="#download"
+              className="text-[var(--sf-ink-muted)] transition-colors hover:text-[var(--sf-ink)]"
+            >
+              Download
+            </a>
+          ) : (
+            <Link
+              href="/#download"
+              className="text-[var(--sf-ink-muted)] transition-colors hover:text-[var(--sf-ink)]"
+            >
+              Download
+            </Link>
+          )}
+          {isShareRoute && (
+            <Link
+              href="/"
+              className="text-[var(--sf-ink-muted)] transition-colors hover:text-[var(--sf-ink)]"
+            >
+              Home
+            </Link>
+          )}
+        </nav>
       </div>
     </header>
   );

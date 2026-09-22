@@ -1,7 +1,7 @@
 export type IceResponse = {
   iceServers: {
-    urls: string
-    username?: string
-    credential?: string
-  }[]
-}
+    urls: string | string[];
+    username?: string;
+    credential?: string;
+  }[];
+};

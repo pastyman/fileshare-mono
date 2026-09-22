@@ -18,6 +18,13 @@
         "command": "npm run package",
         "cwd": "packages/sharefolder-app"
       }
+    },
+    "make": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "npm run make",
+        "cwd": "packages/sharefolder-app"
+      }
     }
   }
 }
