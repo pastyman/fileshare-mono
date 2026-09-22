@@ -21,9 +21,9 @@ const config: ForgeConfig = {
     new AutoUnpackNativesPlugin({}),
     new WebpackPlugin({
       mainConfig,
-      // Allow signaling API + websocket HMR during development
+      // Allow local signaling in dev, plus production sharefolder.io when linked via tunnel
       devContentSecurityPolicy:
-        "default-src 'self' 'unsafe-inline' data:; script-src 'self' 'unsafe-eval' 'unsafe-inline' data:; connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*; img-src 'self' data: blob:; media-src 'self' blob:;",
+        "default-src 'self' 'unsafe-inline' data:; script-src 'self' 'unsafe-eval' 'unsafe-inline' data:; connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* https://sharefolder.io https://*.sharefolder.io wss://sharefolder.io wss://*.sharefolder.io; img-src 'self' data: blob:; media-src 'self' blob:;",
       renderer: {
         config: rendererConfig,
         entryPoints: [

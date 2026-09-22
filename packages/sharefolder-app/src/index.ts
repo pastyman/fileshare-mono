@@ -164,7 +164,12 @@ function closeRtcWindow(win: BrowserWindow) {
   }
 }
 
-function openRTCWindow(peerId: string, folderId: string, folderPath?: string) {
+function openRTCWindow(
+  peerId: string,
+  folderId: string,
+  folderPath?: string,
+  isPasswordProtected = false
+) {
   console.log(`Opening RTC host for folder: ${folderId} (${folderPath || 'path unknown'}), peer: ${peerId}`);
 
   const sessionId = `${peerId}:${folderId}:${Date.now()}`;
@@ -177,9 +182,15 @@ function openRTCWindow(peerId: string, folderId: string, folderPath?: string) {
   });
   notifyStatsUpdated();
 
+  // Hidden by default; set SHOW_RTC_WINDOWS=1 for host window + DevTools debugging.
+  const showRtcDebugWindow = ['1', 'true', 'yes'].includes(
+    String(process.env.SHOW_RTC_WINDOWS || '').toLowerCase()
+  );
+
   const rtcWindow = new BrowserWindow({
     width: 800,
     height: 600,
+    show: showRtcDebugWindow,
     title: `ShareFolder Host - ${folderId}`,
     webPreferences: {
       nodeIntegration: false,
@@ -190,7 +201,9 @@ function openRTCWindow(peerId: string, folderId: string, folderPath?: string) {
   });
 
   rtcWindow.loadURL(RTC_SERVER_WEBPACK_ENTRY);
-  rtcWindow.webContents.openDevTools({ mode: 'detach' });
+  if (showRtcDebugWindow) {
+    rtcWindow.webContents.openDevTools({ mode: 'detach' });
+  }
 
   const clearSession = () => {
     if (liveSessions.delete(sessionId)) {
@@ -216,6 +229,7 @@ function openRTCWindow(peerId: string, folderId: string, folderPath?: string) {
       folderId,
       folderPath: folderPath || 'Path not available',
       signalingBaseUrl: getSignalingBaseUrl(),
+      isPasswordProtected,
     });
   });
 }
@@ -249,10 +263,16 @@ async function checkConnectionStatus() {
             }
             const folder = await database.getFolderByGuid(connection.folderId);
             const folderPath = folder ? folder.path : undefined;
+            const isPasswordProtected = Boolean(folder?.isPasswordProtected);
             if (!folderPath) {
               console.log(`Could not get folder path for GUID ${connection.folderId}, opening without path`);
             }
-            openRTCWindow(connection.peerId, connection.folderId, folderPath);
+            openRTCWindow(
+              connection.peerId,
+              connection.folderId,
+              folderPath,
+              isPasswordProtected
+            );
           } catch (error) {
             console.error(`Failed to open RTC for folder ${connection.folderId}:`, error);
             openRTCWindow(connection.peerId, connection.folderId);
@@ -439,8 +459,10 @@ app.whenReady().then(() => {
     setDevSignalingBase(
       process.env.SIGNALING_BASE || connectionsEndpoint.replace(/\/connections\/?$/, '')
     );
-    setDevWebBase(process.env.WEB_BASE || 'http://localhost:3010');
-    console.log(`Development mode: API ${getConnectionEndpoint()}, signaling ${getSignalingBaseUrl()}`);
+    setDevWebBase(process.env.WEB_BASE || 'https://sharefolder.io');
+    console.log(
+      `Development mode: API ${getConnectionEndpoint()}, signaling ${getSignalingBaseUrl()}, web ${process.env.WEB_BASE || 'https://sharefolder.io'}`
+    );
   }
   
   // IPC: open directory dialog
@@ -556,6 +578,18 @@ app.whenReady().then(() => {
       throw error;
     }
   });
+
+  ipcMain.handle(
+    'db-authenticate-user',
+    async (_event, email: string, password: string) => {
+      try {
+        return await database.authenticateUser(email, password);
+      } catch (error) {
+        console.error('Failed to authenticate user:', error);
+        throw error;
+      }
+    }
+  );
 
   ipcMain.handle('db-list-folders', async () => {
     try {

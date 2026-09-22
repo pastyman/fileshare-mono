@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { generateGuid } from '@/lib/utils';
 import {
@@ -32,6 +32,8 @@ type Status =
   | 'connected'
   | 'error'
   | 'disconnected';
+
+type AuthState = 'unknown' | 'required' | 'authenticated';
 
 const CONFIGURED_SIGNALING_BASE = (
   process.env.NEXT_PUBLIC_SIGNALING_URL ?? ''
@@ -591,6 +593,11 @@ function FolderPageInner() {
 
   const [status, setStatus] = useState<Status>('signaling');
   const [error, setError] = useState<string | null>(null);
+  const [authState, setAuthState] = useState<AuthState>('unknown');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authSubmitting, setAuthSubmitting] = useState(false);
   const [entries, setEntries] = useState<DirEntry[]>([]);
   const [listingLoading, setListingLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -605,6 +612,7 @@ function FolderPageInner() {
   const trackedDownloadsRef = useRef<Set<number>>(new Set());
   const rtcClientRef = useRef<any>(null);
   const entriesLenRef = useRef(0);
+  const authStateRef = useRef<AuthState>('unknown');
 
   const instanceId = Array.isArray(params.instanceId)
     ? params.instanceId[0]
@@ -618,6 +626,10 @@ function FolderPageInner() {
   useEffect(() => {
     entriesLenRef.current = entries.length;
   }, [entries]);
+
+  useEffect(() => {
+    authStateRef.current = authState;
+  }, [authState]);
 
   const go = useCallback(
     (nextPath: string) => {
@@ -649,11 +661,32 @@ function FolderPageInner() {
     );
   }, []);
 
+  const submitAuth = useCallback(
+    (event: FormEvent) => {
+      event.preventDefault();
+      const rtc = rtcClientRef.current;
+      if (!rtc || authSubmitting) return;
+      setAuthError(null);
+      setAuthSubmitting(true);
+      rtc.send(
+        encodeChunkWithHeader({
+          type: 'auth',
+          data: {
+            email: authEmail.trim(),
+            password: authPassword,
+          },
+        })
+      );
+    },
+    [authEmail, authPassword, authSubmitting]
+  );
+
   // Whenever the URL path changes (click, breadcrumb, back/forward), load it.
   useEffect(() => {
     if (status !== 'connected') return;
+    if (authState !== 'authenticated') return;
     listDir(path);
-  }, [path, status, listDir]);
+  }, [path, status, authState, listDir]);
 
   // Connect once for this share link. Do not re-run on search-param navigations.
   useEffect(() => {
@@ -675,6 +708,8 @@ function FolderPageInner() {
     const run = async () => {
       try {
         setStatus('signaling');
+        setAuthState('unknown');
+        authStateRef.current = 'unknown';
         const connectRes = await fetch('/api/connect', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -730,19 +765,58 @@ function FolderPageInner() {
           setListingLoading(true);
           listingTimeout = setTimeout(() => {
             if (cancelled) return;
+            if (authStateRef.current === 'required') return;
             setListingLoading((loading) => {
               if (loading) setError('Timed out waiting for folder listing');
               return false;
             });
           }, 20_000);
-          // Triggers the path effect to listDir(path) from the URL.
+          // Triggers the path effect once auth is known / authenticated.
           setStatus('connected');
         };
 
         const onMessageRecieved = (data: any) => {
           const { header } = decodeChunkWithHeader(data);
+          if (header.type === 'authRequired') {
+            clearListingTimeout();
+            setAuthState('required');
+            authStateRef.current = 'required';
+            setListingLoading(false);
+            setAuthSubmitting(false);
+            setError(null);
+            return;
+          }
+          if (header.type === 'authOk') {
+            clearListingTimeout();
+            setAuthState('authenticated');
+            authStateRef.current = 'authenticated';
+            setAuthSubmitting(false);
+            setAuthError(null);
+            setAuthPassword('');
+            setListingLoading(true);
+            listingTimeout = setTimeout(() => {
+              if (cancelled) return;
+              setListingLoading((loading) => {
+                if (loading) setError('Timed out waiting for folder listing');
+                return false;
+              });
+            }, 20_000);
+            return;
+          }
+          if (header.type === 'authFail') {
+            setAuthSubmitting(false);
+            setAuthError(
+              (header.data?.message as string) ||
+                'Invalid email or password'
+            );
+            return;
+          }
           if (header.type === 'dirListing') {
             clearListingTimeout();
+            if (authStateRef.current !== 'authenticated') {
+              setAuthState('authenticated');
+              authStateRef.current = 'authenticated';
+            }
             const payload = header.data as {
               path: string;
               entries: DirEntry[];
@@ -766,6 +840,10 @@ function FolderPageInner() {
           }
           if (header.type === 'fileInfo') {
             clearListingTimeout();
+            if (authStateRef.current !== 'authenticated') {
+              setAuthState('authenticated');
+              authStateRef.current = 'authenticated';
+            }
             const payload = header.data;
             const files = Array.isArray(payload)
               ? payload
@@ -861,6 +939,11 @@ function FolderPageInner() {
     [previewable]
   );
 
+  const headerStatus =
+    status === 'connected' && authState === 'required'
+      ? 'This folder is password protected'
+      : `${statusCopy[status]}${error ? ` — ${error}` : ''}`;
+
   return (
     <div className="mx-auto max-w-6xl px-6 pb-16 pt-20">
       <header className="sf-rise mb-10">
@@ -868,12 +951,9 @@ function FolderPageInner() {
           Shared folder
         </p>
         <h1 className="sf-display mt-3 text-4xl text-[var(--sf-ink)] sm:text-5xl">
-          Browse files
+          {authState === 'required' ? 'Sign in to browse' : 'Browse files'}
         </h1>
-        <p className="mt-3 text-[var(--sf-ink-muted)]">
-          {statusCopy[status]}
-          {error ? ` — ${error}` : ''}
-        </p>
+        <p className="mt-3 text-[var(--sf-ink-muted)]">{headerStatus}</p>
       </header>
 
       {status !== 'connected' && status !== 'error' && (
@@ -891,7 +971,61 @@ function FolderPageInner() {
         </div>
       )}
 
-      {status === 'connected' && (
+      {status === 'connected' && authState === 'required' && (
+        <form
+          onSubmit={submitAuth}
+          className="sf-panel sf-rise-delay mx-auto max-w-md space-y-4 px-6 py-8"
+        >
+          <p className="text-sm text-[var(--sf-ink-muted)]">
+            Enter the email and password set up in the ShareFolder desktop app.
+          </p>
+          <label className="block space-y-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wide text-[var(--sf-ink-muted)]">
+              Email
+            </span>
+            <input
+              type="email"
+              autoComplete="username"
+              required
+              value={authEmail}
+              onChange={(e) => setAuthEmail(e.target.value)}
+              className="w-full border border-[var(--sf-line)] bg-white/80 px-3 py-2.5 text-[var(--sf-ink)] outline-none transition focus:border-[var(--sf-accent)]"
+            />
+          </label>
+          <label className="block space-y-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wide text-[var(--sf-ink-muted)]">
+              Password
+            </span>
+            <input
+              type="password"
+              autoComplete="current-password"
+              required
+              value={authPassword}
+              onChange={(e) => setAuthPassword(e.target.value)}
+              className="w-full border border-[var(--sf-line)] bg-white/80 px-3 py-2.5 text-[var(--sf-ink)] outline-none transition focus:border-[var(--sf-accent)]"
+            />
+          </label>
+          {authError && (
+            <p className="text-sm text-[rgb(120,35,35)]">{authError}</p>
+          )}
+          <button
+            type="submit"
+            disabled={authSubmitting}
+            className="w-full bg-[var(--sf-ink)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--sf-accent)] disabled:opacity-60"
+          >
+            {authSubmitting ? 'Signing in…' : 'Sign in'}
+          </button>
+        </form>
+      )}
+
+      {status === 'connected' && authState === 'unknown' && (
+        <div className="sf-panel sf-rise-delay flex items-center gap-4 px-6 py-8">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--sf-accent)] border-t-transparent" />
+          <p className="text-[var(--sf-ink-muted)]">Preparing folder…</p>
+        </div>
+      )}
+
+      {status === 'connected' && authState === 'authenticated' && (
         <div className="sf-rise-delay space-y-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <nav className="flex flex-wrap items-center gap-1 text-sm">
