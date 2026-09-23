@@ -34,6 +34,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   }) => void) => {
     ipcRenderer.on('rtc-connection-info', (_event, data) => callback(data));
   },
+  rtcHostReady: () => {
+    ipcRenderer.send('rtc-host-ready');
+  },
   closeRtcWindow: () => {
     ipcRenderer.send('close-rtc-window');
   },

@@ -22,6 +22,7 @@ declare global {
         signalingBaseUrl: string;
         isPasswordProtected?: boolean;
       }) => void) => void;
+      rtcHostReady: () => void;
       closeRtcWindow: () => void;
       sendNewConnections: (connections: Array<{ peerId: string; folderId: string }>) => void;
       listDir: (

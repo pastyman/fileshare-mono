@@ -126,7 +126,16 @@ app.on('ready', async () => {
     // Initialize database
     await database.initialize();
     console.log('Database initialized successfully');
-    
+
+    // Start polling from main so the first share works before/without relying
+    // on the renderer mount lifecycle.
+    try {
+      const guid = await database.getOrCreateInstance();
+      await startConnectionPolling(guid);
+    } catch (pollError) {
+      console.error('Failed to start connection polling after DB init:', pollError);
+    }
+
     // Create window after database is ready
     createWindow();
   } catch (error) {
@@ -197,8 +206,32 @@ function openRTCWindow(
       contextIsolation: true,
       preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
       webSecurity: false,
+      // Keep host signaling/WebRTC alive while the window stays hidden.
+      backgroundThrottling: false,
     },
   });
+
+  const connectionInfo = {
+    peerId,
+    folderId,
+    folderPath: folderPath || 'Path not available',
+    signalingBaseUrl: getSignalingBaseUrl(),
+    isPasswordProtected,
+  };
+
+  const sendConnectionInfo = () => {
+    if (rtcWindow.isDestroyed()) return;
+    console.log('RTC host window ready — sending connection info');
+    rtcWindow.webContents.send('rtc-connection-info', connectionInfo);
+  };
+
+  // Renderer may miss did-finish-load if it registers late; also answer explicit ready.
+  const onHostReady = (event: Electron.IpcMainEvent) => {
+    if (event.sender === rtcWindow.webContents) {
+      sendConnectionInfo();
+    }
+  };
+  ipcMain.on('rtc-host-ready', onHostReady);
 
   rtcWindow.loadURL(RTC_SERVER_WEBPACK_ENTRY);
   if (showRtcDebugWindow) {
@@ -206,6 +239,7 @@ function openRTCWindow(
   }
 
   const clearSession = () => {
+    ipcMain.removeListener('rtc-host-ready', onHostReady);
     if (liveSessions.delete(sessionId)) {
       notifyStatsUpdated();
     }
@@ -224,13 +258,7 @@ function openRTCWindow(
 
   rtcWindow.webContents.on('did-finish-load', () => {
     console.log('RTC host window loaded');
-    rtcWindow.webContents.send('rtc-connection-info', {
-      peerId,
-      folderId,
-      folderPath: folderPath || 'Path not available',
-      signalingBaseUrl: getSignalingBaseUrl(),
-      isPasswordProtected,
-    });
+    sendConnectionInfo();
   });
 }
 
@@ -484,8 +512,8 @@ app.whenReady().then(() => {
   });
 
   // IPC: start connection polling
-  ipcMain.handle('start-connection-polling', async (event, guid: string) => {
-    startConnectionPolling(guid);
+  ipcMain.handle('start-connection-polling', async (_event, guid: string) => {
+    await startConnectionPolling(guid);
     return { success: true };
   });
 
