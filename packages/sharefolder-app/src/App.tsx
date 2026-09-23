@@ -32,6 +32,7 @@ import SettingsPage from "./pages/Settings";
 import UsersPage from "./pages/Users";
 import StatsPage from "./pages/Stats";
 import ConnectionStatus from "./components/ConnectionStatus";
+import { ShareFolderMark } from "./components/ShareFolderMark";
 import { HashRouter, Navigate } from "react-router-dom";
 import { createAppTheme } from "./theme";
 import "./theme/types"; // Import theme type declarations
@@ -214,9 +215,12 @@ function Shell() {
             >
               {open ? <MenuIcon /> : <ChevronRightIcon />}
             </IconButton>
-            <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-              Sharefolder
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexGrow: 1 }}>
+              <ShareFolderMark size={28} />
+              <Typography variant="h6" noWrap component="div" fontWeight={700}>
+                ShareFolder
+              </Typography>
+            </Box>
             <IconButton
               color="inherit"
               aria-label="toggle theme"

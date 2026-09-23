@@ -11,6 +11,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openExternal: async (url: string): Promise<void> => {
     return ipcRenderer.invoke('open-external', url);
   },
+  getPrefs: async (): Promise<{ openAtLogin: boolean }> => {
+    return ipcRenderer.invoke('app-get-prefs');
+  },
+  setOpenAtLogin: async (
+    enabled: boolean
+  ): Promise<{ openAtLogin: boolean; applied: boolean; platform: string }> => {
+    return ipcRenderer.invoke('app-set-open-at-login', enabled);
+  },
+  getAppInfo: async (): Promise<{
+    name: string;
+    version: string;
+    isPackaged: boolean;
+    platform: string;
+  }> => {
+    return ipcRenderer.invoke('app-get-info');
+  },
   startConnectionPolling: async (guid: string): Promise<{ success: boolean }> => {
     return ipcRenderer.invoke('start-connection-polling', guid);
   },
