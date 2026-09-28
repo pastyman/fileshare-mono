@@ -1,4 +1,5 @@
 import { corsPreflight, getOrm, jsonError, jsonOk } from '@/lib/signaling';
+import { trackDaily } from '@/lib/usage';
 
 export async function OPTIONS() {
   return corsPreflight();
@@ -27,6 +28,7 @@ export async function POST(request: Request) {
     });
 
     const result = await connection.save();
+    trackDaily('connectRequests');
 
     return jsonOk({
       success: true,
