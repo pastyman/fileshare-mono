@@ -7,6 +7,16 @@ declare global {
       testPing: () => Promise<string>;
       selectFolder: () => Promise<string | null>;
       openExternal: (url: string) => Promise<void>;
+      getPrefs: () => Promise<{ openAtLogin: boolean }>;
+      setOpenAtLogin: (
+        enabled: boolean
+      ) => Promise<{ openAtLogin: boolean; applied: boolean; platform: string }>;
+      getAppInfo: () => Promise<{
+        name: string;
+        version: string;
+        isPackaged: boolean;
+        platform: string;
+      }>;
       startConnectionPolling: (guid: string) => Promise<{ success: boolean }>;
       stopConnectionPolling: () => Promise<{ success: boolean }>;
       onConnectionStatusUpdate: (callback: (data: {
@@ -22,6 +32,7 @@ declare global {
         signalingBaseUrl: string;
         isPasswordProtected?: boolean;
       }) => void) => void;
+      rtcHostReady: () => void;
       closeRtcWindow: () => void;
       sendNewConnections: (connections: Array<{ peerId: string; folderId: string }>) => void;
       listDir: (

@@ -6,6 +6,7 @@ import {
   jsonOk,
   withCors,
 } from '@/lib/signaling';
+import { trackDaily } from '@/lib/usage';
 
 export async function OPTIONS() {
   return corsPreflight();
@@ -33,6 +34,7 @@ export async function POST(request: Request) {
       },
       { upsert: true, new: true }
     );
+    trackDaily('hostRegistrations');
 
     return jsonOk({ success: true });
   } catch (error) {

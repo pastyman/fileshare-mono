@@ -26,10 +26,13 @@ export default function ConnectionStatus({ open = true }: ConnectionStatusProps)
 
   // Initialize instance GUID and start polling
   React.useEffect(() => {
+    let cancelled = false;
+
     window.electronAPI.dbGetInstance().then(async (guid) => {
+      if (cancelled) return;
       setInstanceGuid(guid);
-      
-      // Start polling from main process
+
+      // Start polling from main process (safe if main already started it)
       try {
         await window.electronAPI.startConnectionPolling(guid);
       } catch (error) {
@@ -52,9 +55,9 @@ export default function ConnectionStatus({ open = true }: ConnectionStatusProps)
       }
     });
 
-    // Cleanup on unmount
+    // Do not stop polling on unmount — polling must outlive drawer remounts.
     return () => {
-      window.electronAPI.stopConnectionPolling().catch(console.error);
+      cancelled = true;
     };
   }, []);
 

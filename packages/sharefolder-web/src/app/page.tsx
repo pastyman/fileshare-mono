@@ -83,7 +83,12 @@ export default function Home() {
 
           <p className="mt-8 text-sm text-[var(--sf-ink-muted)]">
             macOS builds are unsigned for now — right-click → Open the first
-            time if Gatekeeper blocks them. Releases:{' '}
+            time if Gatekeeper blocks them. On Ubuntu, App Center often cannot
+            uninstall a local .deb; remove it with{' '}
+            <code className="rounded bg-black/5 px-1.5 py-0.5 font-mono text-[0.9em] text-[var(--sf-ink)]">
+              sudo apt remove sharefolder
+            </code>
+            . Releases:{' '}
             <a
               href="https://github.com/pastyman/fileshare-mono/releases"
               className="font-medium text-[var(--sf-ink)] underline-offset-2 hover:underline"

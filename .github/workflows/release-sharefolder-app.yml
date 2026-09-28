@@ -71,6 +71,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Need full tag history so release notes compare against the
+          # previous sharefolder-v* tag only (not the whole repo).
+          fetch-depth: 0
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -88,13 +92,51 @@ jobs:
             echo "name=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Resolve previous tag and notes
+        id: notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.tag.outputs.name }}"
+          PREV="$(git tag -l 'sharefolder-v*' --sort=-v:refname | grep -vxF "$TAG" | head -n1 || true)"
+          echo "previous=${PREV}" >> "$GITHUB_OUTPUT"
+
+          if [[ -z "$PREV" ]]; then
+            echo "No previous sharefolder tag; GitHub will generate full notes."
+            echo "generate=true" >> "$GITHUB_OUTPUT"
+            echo "body=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Tag may not exist locally yet on workflow_dispatch before create;
+          # fall back to HEAD (the commit this release is built from).
+          CUR_SHA="$(git rev-list -n1 "refs/tags/${TAG}" 2>/dev/null || git rev-parse HEAD)"
+          PREV_SHA="$(git rev-list -n1 "$PREV")"
+          if [[ "$CUR_SHA" == "$PREV_SHA" ]]; then
+            echo "generate=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "body<<EOF"
+              echo "Rebuild of \`${PREV}\` (same commit). No application code changes in this release."
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+            echo "Same commit as ${PREV}; skipping duplicated auto notes."
+            exit 0
+          fi
+
+          COUNT="$(git rev-list --count "${PREV}..${CUR_SHA}")"
+          echo "generate=true" >> "$GITHUB_OUTPUT"
+          echo "body=" >> "$GITHUB_OUTPUT"
+          echo "${COUNT} commit(s) since ${PREV}; using GitHub generate-notes with previous_tag."
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag.outputs.name }}
           name: ShareFolder ${{ steps.tag.outputs.name }}
           draft: false
-          generate_release_notes: true
+          generate_release_notes: ${{ steps.notes.outputs.generate == 'true' }}
+          previous_tag: ${{ steps.notes.outputs.previous }}
+          body: ${{ steps.notes.outputs.body }}
           files: release-assets/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

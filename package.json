@@ -5,7 +5,8 @@
   "scripts": {
     "dev:filebump": "nx serve filebump",
     "dev:sharefolder-web": "nx serve sharefolder-web",
-    "dev:sharefolder-app": "nx serve sharefolder-app"
+    "dev:sharefolder-app": "nx serve sharefolder-app",
+    "dev:sharefolder-admin": "nx serve sharefolder-admin"
   },
   "private": true,
   "dependencies": {
@@ -21,6 +22,7 @@
     "@mui/lab": "^5.0.0-alpha.171",
     "@mui/material": "^5.16.0",
     "@mui/material-nextjs": "^5.15.11",
+    "@mui/x-date-pickers": "^7.24.0",
     "@nextui-org/react": "^1.0.0-beta.12",
     "@typegoose/typegoose": "^12.6.0",
     "alib-hashtable": "^1.1.2",

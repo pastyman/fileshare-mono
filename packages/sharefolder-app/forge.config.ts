@@ -6,9 +6,14 @@ import { AutoUnpackNativesPlugin } from '@electron-forge/plugin-auto-unpack-nati
 import { WebpackPlugin } from '@electron-forge/plugin-webpack';
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
+import path from 'node:path';
 
 import { mainConfig } from './webpack.main.config';
 import { rendererConfig } from './webpack.renderer.config';
+
+const iconBase = path.resolve(__dirname, 'assets/icons/icon');
+const iconPng = path.resolve(__dirname, 'assets/icons/icon.png');
+const iconIco = path.resolve(__dirname, 'assets/icons/icon.ico');
 
 const config: ForgeConfig = {
   packagerConfig: {
@@ -16,11 +21,14 @@ const config: ForgeConfig = {
     name: 'ShareFolder',
     executableName: 'sharefolder',
     appBundleId: 'io.sharefolder.app',
+    icon: iconBase,
+    extraResource: [path.resolve(__dirname, 'assets/icons')],
   },
   rebuildConfig: {},
   makers: [
     new MakerSquirrel({
       name: 'ShareFolder',
+      setupIcon: iconIco,
     }),
     // Portable archives for every platform (CI renames to stable public filenames).
     new MakerZIP({}, ['darwin', 'linux', 'win32']),
@@ -30,6 +38,7 @@ const config: ForgeConfig = {
         productName: 'ShareFolder',
         genericName: 'ShareFolder',
         bin: 'sharefolder',
+        icon: iconPng,
         description: 'Share a local folder over the web with peer-to-peer transfers',
         categories: ['Network', 'Utility'],
         maintainer: 'Paris Val Baker',

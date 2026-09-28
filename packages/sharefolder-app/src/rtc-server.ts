@@ -204,7 +204,7 @@ function sendDirListing(
   );
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+function startRtcHost() {
   const app = document.getElementById('app');
   if (app) {
     app.innerHTML =
@@ -216,7 +216,15 @@ document.addEventListener('DOMContentLoaded', () => {
     return;
   }
 
+  let hostStarted = false;
+
   window.electronAPI.onRTCConnectionInfo(async (info: RTCConnectionInfo) => {
+    if (hostStarted) {
+      logToDom('Ignoring duplicate connection info');
+      return;
+    }
+    hostStarted = true;
+
     try {
       const {
         peerId,
@@ -234,6 +242,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (!folderPath || folderPath === 'Path not available') {
         logToDom('ERROR: folder path missing');
+        hostStarted = false;
         window.electronAPI?.closeRtcWindow();
         return;
       }
@@ -245,6 +254,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const iceConfig = await loadIce(signalingBaseUrl);
       if (!iceConfig) {
         logToDom('ERROR: failed to load ICE config');
+        hostStarted = false;
         window.electronAPI?.closeRtcWindow();
         return;
       }
@@ -530,10 +540,20 @@ document.addEventListener('DOMContentLoaded', () => {
       logToDom('Starting WebRTC handshake...');
     } catch (error) {
       console.error(error);
+      hostStarted = false;
       logToDom(
         `ERROR: ${error instanceof Error ? error.message : String(error)}`
       );
       window.electronAPI?.closeRtcWindow();
     }
   });
-});
+
+  // Ask main to (re)send connection info now that the listener is registered.
+  window.electronAPI.rtcHostReady?.();
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', startRtcHost);
+} else {
+  startRtcHost();
+}

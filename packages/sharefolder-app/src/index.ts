@@ -16,6 +16,12 @@ process.on('uncaughtException', (err: NodeJS.ErrnoException) => {
 import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell } from 'electron';
 import * as path from 'path';
 import * as fsp from 'fs/promises';
+import {
+  applyOpenAtLogin,
+  loadPrefs,
+  resolveAppIconPath,
+  savePrefs,
+} from './main/prefs';
 
 console.log('=== MAIN PROCESS STARTING ===');
 
@@ -101,21 +107,35 @@ function listLiveSessions(): LiveSession[] {
 }
 
 const createWindow = (): void => {
+  const iconPath = resolveAppIconPath();
+  const icon = iconPath ? nativeImage.createFromPath(iconPath) : undefined;
+
   // Create the browser window.
   mainWindow = new BrowserWindow({
-    height: 600,
-    width: 800,
+    height: 720,
+    width: 980,
+    minHeight: 520,
+    minWidth: 720,
+    title: 'ShareFolder',
+    icon: icon && !icon.isEmpty() ? icon : undefined,
+    show: false,
+    backgroundColor: '#f3f6f4',
     webPreferences: {
-      sandbox: false, // Allow scripts,
+      sandbox: false,
       preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
     },
+  });
+
+  mainWindow.once('ready-to-show', () => {
+    mainWindow?.show();
   });
 
   // and load the index.html of the app.
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
 
-  // Open the DevTools.
-  mainWindow.webContents.openDevTools();
+  if (!app.isPackaged) {
+    mainWindow.webContents.openDevTools();
+  }
 };
 
 // This method will be called when Electron has finished
@@ -126,7 +146,21 @@ app.on('ready', async () => {
     // Initialize database
     await database.initialize();
     console.log('Database initialized successfully');
-    
+
+    // Launch at login by default (installed builds only).
+    const prefs = loadPrefs();
+    applyOpenAtLogin(prefs.openAtLogin);
+    console.log(`Open at login: ${prefs.openAtLogin} (packaged=${app.isPackaged})`);
+
+    // Start polling from main so the first share works before/without relying
+    // on the renderer mount lifecycle.
+    try {
+      const guid = await database.getOrCreateInstance();
+      await startConnectionPolling(guid);
+    } catch (pollError) {
+      console.error('Failed to start connection polling after DB init:', pollError);
+    }
+
     // Create window after database is ready
     createWindow();
   } catch (error) {
@@ -197,8 +231,32 @@ function openRTCWindow(
       contextIsolation: true,
       preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
       webSecurity: false,
+      // Keep host signaling/WebRTC alive while the window stays hidden.
+      backgroundThrottling: false,
     },
   });
+
+  const connectionInfo = {
+    peerId,
+    folderId,
+    folderPath: folderPath || 'Path not available',
+    signalingBaseUrl: getSignalingBaseUrl(),
+    isPasswordProtected,
+  };
+
+  const sendConnectionInfo = () => {
+    if (rtcWindow.isDestroyed()) return;
+    console.log('RTC host window ready — sending connection info');
+    rtcWindow.webContents.send('rtc-connection-info', connectionInfo);
+  };
+
+  // Renderer may miss did-finish-load if it registers late; also answer explicit ready.
+  const onHostReady = (event: Electron.IpcMainEvent) => {
+    if (event.sender === rtcWindow.webContents) {
+      sendConnectionInfo();
+    }
+  };
+  ipcMain.on('rtc-host-ready', onHostReady);
 
   rtcWindow.loadURL(RTC_SERVER_WEBPACK_ENTRY);
   if (showRtcDebugWindow) {
@@ -206,6 +264,7 @@ function openRTCWindow(
   }
 
   const clearSession = () => {
+    ipcMain.removeListener('rtc-host-ready', onHostReady);
     if (liveSessions.delete(sessionId)) {
       notifyStatsUpdated();
     }
@@ -224,13 +283,7 @@ function openRTCWindow(
 
   rtcWindow.webContents.on('did-finish-load', () => {
     console.log('RTC host window loaded');
-    rtcWindow.webContents.send('rtc-connection-info', {
-      peerId,
-      folderId,
-      folderPath: folderPath || 'Path not available',
-      signalingBaseUrl: getSignalingBaseUrl(),
-      isPasswordProtected,
-    });
+    sendConnectionInfo();
   });
 }
 
@@ -483,9 +536,35 @@ app.whenReady().then(() => {
     }
   });
 
+  ipcMain.handle('app-get-prefs', async () => {
+    return loadPrefs();
+  });
+
+  ipcMain.handle(
+    'app-set-open-at-login',
+    async (_event, enabled: boolean) => {
+      const prefs = savePrefs({ openAtLogin: Boolean(enabled) });
+      applyOpenAtLogin(prefs.openAtLogin);
+      return {
+        ...prefs,
+        applied: app.isPackaged,
+        platform: process.platform,
+      };
+    }
+  );
+
+  ipcMain.handle('app-get-info', async () => {
+    return {
+      name: app.getName(),
+      version: app.getVersion(),
+      isPackaged: app.isPackaged,
+      platform: process.platform,
+    };
+  });
+
   // IPC: start connection polling
-  ipcMain.handle('start-connection-polling', async (event, guid: string) => {
-    startConnectionPolling(guid);
+  ipcMain.handle('start-connection-polling', async (_event, guid: string) => {
+    await startConnectionPolling(guid);
     return { success: true };
   });
 

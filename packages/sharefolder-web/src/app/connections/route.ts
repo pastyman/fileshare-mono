@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { corsPreflight, getOrm, jsonError, jsonOk } from '@/lib/signaling';
+import { trackInstancePoll } from '@/lib/usage';
 
 export async function OPTIONS() {
   return corsPreflight();
@@ -15,6 +16,7 @@ export async function GET(request: NextRequest) {
   }
 
   const instanceId = guid;
+  trackInstancePoll(instanceId);
   const oneMinAgo = new Date(Date.now() - 1 * 60 * 1000);
 
   try {

@@ -8,11 +8,15 @@ import {
   MessagingSchema,
   ConnectSchema,
   HostRegistrationSchema,
+  InstanceSeenSchema,
+  DailyStatSchema,
 } from "./schemas"
 import {
   Messaging,
   Connect,
   HostRegistration,
+  InstanceSeen,
+  DailyStat,
 } from "types"
 
 export const getORMi = (mongoURI: string) => {
@@ -56,10 +60,22 @@ export const getORMi = (mongoURI: string) => {
       HostRegistration
     )
 
+    const ModelInstanceSeen = addModelToTypegoose(
+      mongooseInstance.model("instanceSeen", InstanceSeenSchema, "instances_seen"),
+      InstanceSeen
+    )
+
+    const ModelDailyStat = addModelToTypegoose(
+      mongooseInstance.model("dailyStat", DailyStatSchema, "daily_stats"),
+      DailyStat
+    )
+
     return {
       ModelMessaging,
       ModelConnect,
       ModelHostRegistration,
+      ModelInstanceSeen,
+      ModelDailyStat,
     }
   }
 
@@ -69,6 +85,8 @@ export const getORMi = (mongoURI: string) => {
       ModelMessaging: ReturnModelType<typeof Messaging>,
       ModelConnect: ReturnModelType<typeof Connect>,
       ModelHostRegistration: ReturnModelType<typeof HostRegistration>,
+      ModelInstanceSeen: ReturnModelType<typeof InstanceSeen>,
+      ModelDailyStat: ReturnModelType<typeof DailyStat>,
     }
   > = {}
   const getClient = () => {
@@ -81,11 +99,15 @@ export const getORMi = (mongoURI: string) => {
   const getMessagingModel = () => getClient().ModelMessaging
   const getConnectModel = () => getClient().ModelConnect
   const getHostRegistrationModel = () => getClient().ModelHostRegistration
+  const getInstanceSeenModel = () => getClient().ModelInstanceSeen
+  const getDailyStatModel = () => getClient().ModelDailyStat
 
   return {
     getMessagingModel,
     getConnectModel,
     getHostRegistrationModel,
+    getInstanceSeenModel,
+    getDailyStatModel,
   }
 }
 

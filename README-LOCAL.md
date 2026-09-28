@@ -12,3 +12,4 @@ cloudflared tunnel run --url http://localhost:3010 --token eyJhIjoiMjUyOTg2NTNhY
 # Local stack:
 #   npx nx serve sharefolder-web   # :3010 (UI + signaling API)
 #   npx nx serve sharefolder-app   # Electron → http://localhost:3010
+#   npx nx serve sharefolder-admin # :3020 owner stats (needs ADMIN_PASSWORD in packages/sharefolder-admin/.env.local)
