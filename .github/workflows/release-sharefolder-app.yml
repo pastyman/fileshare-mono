@@ -46,14 +46,17 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y fakeroot dpkg
 
-      - name: Install WiX Toolset
+      # windows-2022 images already include WiX 3.14; only add its bin dir to PATH.
+      - name: Add WiX Toolset to PATH
         if: matrix.platform == 'windows'
         shell: pwsh
         run: |
-          choco install wixtoolset --version=3.14.0 -y --no-progress
-          $candle = Get-ChildItem -Path 'C:\Program Files (x86)\WiX Toolset v3.14' -Recurse -Filter candle.exe | Select-Object -First 1
-          if (-not $candle) { throw 'candle.exe not found after WiX install' }
-          $candle.DirectoryName | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          $wixBin = if ($env:WIX) { Join-Path $env:WIX 'bin' } else { 'C:\Program Files (x86)\WiX Toolset v3.14\bin' }
+          if (-not (Test-Path (Join-Path $wixBin 'candle.exe'))) {
+            throw "candle.exe not found in $wixBin"
+          }
+          $wixBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          Write-Host "Using WiX at $wixBin"
 
       - name: Make ShareFolder app
         working-directory: packages/sharefolder-app
