@@ -1,5 +1,5 @@
 // src/preload.ts
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 
 contextBridge.exposeInMainWorld('electronAPI', {
   testPing: async (): Promise<string> => {
@@ -7,6 +7,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   selectFolder: async (): Promise<string | null> => {
     return ipcRenderer.invoke('select-folder');
+  },
+  getPathForFile: (file: File): string => {
+    return webUtils.getPathForFile(file);
   },
   openExternal: async (url: string): Promise<void> => {
     return ipcRenderer.invoke('open-external', url);

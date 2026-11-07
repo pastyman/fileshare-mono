@@ -1,11 +1,12 @@
 // src/renderer/pages/Home.tsx
 import * as React from 'react';
-import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, List, ListItem, ListItemText, IconButton, Stack, Typography, FormControlLabel, Switch, TextField, Chip, Link, Tooltip, CircularProgress } from '@mui/material';
+import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Stack, Typography, FormControlLabel, Switch, Chip, Tooltip, CircularProgress } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import CreateNewFolderOutlinedIcon from '@mui/icons-material/CreateNewFolderOutlined';
 // Database types and operations now handled via IPC
 interface FolderEntry {
   id?: number;
@@ -18,6 +19,36 @@ interface FolderEntry {
 import { getFolderWebUrl } from '../renderer/config';
 import TruncatedText from '../components/TruncatedText';
 
+function collectDroppedFolderPaths(dataTransfer: DataTransfer): string[] {
+  const paths: string[] = [];
+  const seen = new Set<string>();
+
+  const items = dataTransfer.items;
+  if (items?.length) {
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.kind !== 'file') continue;
+      const entry = item.webkitGetAsEntry?.();
+      if (entry && !entry.isDirectory) continue;
+      const file = item.getAsFile();
+      if (!file) continue;
+      const folderPath = window.electronAPI.getPathForFile(file);
+      if (!folderPath || seen.has(folderPath)) continue;
+      seen.add(folderPath);
+      paths.push(folderPath);
+    }
+    return paths;
+  }
+
+  for (const file of Array.from(dataTransfer.files)) {
+    const folderPath = window.electronAPI.getPathForFile(file);
+    if (!folderPath || seen.has(folderPath)) continue;
+    seen.add(folderPath);
+    paths.push(folderPath);
+  }
+  return paths;
+}
+
 export default function Home() {
   const [folders, setFolders] = React.useState<FolderEntry[]>([]);
   const [busy, setBusy] = React.useState(false);
@@ -29,10 +60,13 @@ export default function Home() {
   });
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const [actionError, setActionError] = React.useState<string | null>(null);
   const [folderUrls, setFolderUrls] = React.useState<Record<string, string>>({});
   const [instanceId, setInstanceId] = React.useState<string>('');
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
   const [folderToDelete, setFolderToDelete] = React.useState<FolderEntry | null>(null);
+  const [dragActive, setDragActive] = React.useState(false);
+  const dragDepth = React.useRef(0);
 
   const refresh = React.useCallback(async () => {
     try {
@@ -83,17 +117,90 @@ export default function Home() {
     }
   }, [instanceId, refresh]);
 
+  const addFoldersByPath = React.useCallback(
+    async (folderPaths: string[]) => {
+      if (!folderPaths.length) {
+        setActionError('Drop a folder, not a file.');
+        return;
+      }
+
+      setBusy(true);
+      setActionError(null);
+      try {
+        const failures: string[] = [];
+        for (const folderPath of folderPaths) {
+          try {
+            await window.electronAPI.dbAddFolder(folderPath);
+          } catch (err) {
+            console.error('Failed to add dropped folder:', folderPath, err);
+            failures.push(folderPath);
+          }
+        }
+        await refresh();
+        if (failures.length === folderPaths.length) {
+          setActionError('Only folders can be shared. Drop a folder from your computer.');
+        } else if (failures.length > 0) {
+          setActionError(
+            `Added ${folderPaths.length - failures.length} folder(s). Could not add: ${failures.join(', ')}`
+          );
+        }
+      } finally {
+        setBusy(false);
+      }
+    },
+    [refresh]
+  );
+
   const handleAddClick = async () => {
     setBusy(true);
+    setActionError(null);
     try {
       const path = await window.electronAPI.selectFolder();
       if (path) {
         await window.electronAPI.dbAddFolder(path);
         await refresh();
       }
+    } catch (err) {
+      console.error('Failed to add folder:', err);
+      setActionError('Could not add that folder.');
     } finally {
       setBusy(false);
     }
+  };
+
+  const handleDragEnter = (event: React.DragEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    dragDepth.current += 1;
+    if (event.dataTransfer.types.includes('Files')) {
+      setDragActive(true);
+    }
+  };
+
+  const handleDragOver = (event: React.DragEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = 'copy';
+  };
+
+  const handleDragLeave = (event: React.DragEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    dragDepth.current = Math.max(0, dragDepth.current - 1);
+    if (dragDepth.current === 0) {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = async (event: React.DragEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    dragDepth.current = 0;
+    setDragActive(false);
+    if (busy) return;
+
+    const folderPaths = collectDroppedFolderPaths(event.dataTransfer);
+    await addFoldersByPath(folderPaths);
   };
 
   const handleRemove = async (id?: number) => {
@@ -210,8 +317,56 @@ export default function Home() {
         </Box>
       )}
 
+      {actionError && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setActionError(null)}>
+          {actionError}
+        </Alert>
+      )}
+
+      <Box
+        onDragEnter={handleDragEnter}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        sx={{
+          mb: 2,
+          px: 2,
+          py: 3,
+          borderRadius: 1,
+          border: (theme) =>
+            `2px dashed ${
+              dragActive
+                ? theme.palette.primary.main
+                : theme.custom.folderItem[theme.palette.mode].border
+            }`,
+          backgroundColor: (theme) =>
+            dragActive
+              ? theme.palette.mode === 'dark'
+                ? 'rgba(144, 202, 249, 0.12)'
+                : 'rgba(25, 118, 210, 0.06)'
+              : theme.custom.folderItem[theme.palette.mode].background,
+          textAlign: 'center',
+          transition: 'border-color 120ms ease, background-color 120ms ease',
+          opacity: busy ? 0.7 : 1,
+          pointerEvents: busy ? 'none' : 'auto',
+        }}
+      >
+        <CreateNewFolderOutlinedIcon
+          color={dragActive ? 'primary' : 'action'}
+          sx={{ fontSize: 36, mb: 1 }}
+        />
+        <Typography variant="subtitle1" fontWeight="medium">
+          {dragActive ? 'Drop folder to share' : 'Drag a folder here'}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+          Or use Add Folder to browse. You can drop more than one folder at once.
+        </Typography>
+      </Box>
+
       {folders.length === 0 && !loading && !error ? (
-        <Typography variant="body1" color="text.secondary">No folders yet. Click "Add Folder" to begin.</Typography>
+        <Typography variant="body1" color="text.secondary">
+          No folders yet. Drop a folder above or click &quot;Add Folder&quot; to begin.
+        </Typography>
       ) : (
         <Box>
           {folders.map(f => (

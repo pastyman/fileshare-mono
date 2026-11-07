@@ -31,8 +31,8 @@ export const SHAREFOLDER_DOWNLOADS: ShareFolderDownload[] = [
   {
     id: 'windows',
     label: 'Windows',
-    file: 'ShareFolder-windows-x64-setup.exe',
-    hint: 'Installer (.exe)',
+    file: 'ShareFolder-windows-x64.msi',
+    hint: 'Installer (.msi)',
   },
 ];
 

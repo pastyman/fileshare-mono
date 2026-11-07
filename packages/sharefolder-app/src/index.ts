@@ -66,10 +66,6 @@ import {
   getConnectionEndpoint,
   getSignalingBaseUrl,
 } from './renderer/config';
-// Handle creating/removing shortcuts on Windows when installing/uninstalling.
-if (require('electron-squirrel-startup')) {
-  app.quit();
-}
 
 let mainWindow: BrowserWindow | null = null;
 let connectionPollingInterval: NodeJS.Timeout | null = null;
@@ -679,9 +675,17 @@ app.whenReady().then(() => {
     }
   });
 
-  ipcMain.handle('db-add-folder', async (event, path: string, guid?: string) => {
+  ipcMain.handle('db-add-folder', async (event, folderPath: string, guid?: string) => {
     try {
-      return await database.addFolder(path, guid);
+      if (typeof folderPath !== 'string' || !folderPath.trim()) {
+        throw new Error('Folder path is required');
+      }
+      const resolved = path.resolve(folderPath);
+      const stats = await fsp.stat(resolved);
+      if (!stats.isDirectory()) {
+        throw new Error('Only folders can be shared');
+      }
+      return await database.addFolder(resolved, guid);
     } catch (error) {
       console.error('Failed to add folder:', error);
       throw error;

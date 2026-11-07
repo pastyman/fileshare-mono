@@ -6,6 +6,7 @@ declare global {
     electronAPI: {
       testPing: () => Promise<string>;
       selectFolder: () => Promise<string | null>;
+      getPathForFile: (file: File) => string;
       openExternal: (url: string) => Promise<void>;
       getPrefs: () => Promise<{ openAtLogin: boolean }>;
       setOpenAtLogin: (

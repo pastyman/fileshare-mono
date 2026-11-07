@@ -1,5 +1,5 @@
 import type { ForgeConfig } from '@electron-forge/shared-types';
-import { MakerSquirrel } from '@electron-forge/maker-squirrel';
+import { MakerWix } from '@electron-forge/maker-wix';
 import { MakerZIP } from '@electron-forge/maker-zip';
 import { MakerDeb } from '@electron-forge/maker-deb';
 import { AutoUnpackNativesPlugin } from '@electron-forge/plugin-auto-unpack-natives';
@@ -26,9 +26,22 @@ const config: ForgeConfig = {
   },
   rebuildConfig: {},
   makers: [
-    new MakerSquirrel({
+    new MakerWix({
       name: 'ShareFolder',
-      setupIcon: iconIco,
+      description: 'Share a local folder over the web with peer-to-peer transfers',
+      manufacturer: 'ShareFolder',
+      exe: 'sharefolder.exe',
+      icon: iconIco,
+      language: 1033,
+      // Stable across releases so later MSIs upgrade this install. Do not change.
+      upgradeCode: '3621a6d3-30a9-4145-862b-849870ab2242',
+      programFilesFolderName: 'ShareFolder',
+      shortcutFolderName: 'ShareFolder',
+      shortcutName: 'ShareFolder',
+      defaultInstallMode: 'perMachine',
+      ui: {
+        chooseDirectory: true,
+      },
     }),
     // Portable archives for every platform (CI renames to stable public filenames).
     new MakerZIP({}, ['darwin', 'linux', 'win32']),

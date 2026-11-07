@@ -36,7 +36,7 @@ case "${PLATFORM}" in
     fi
     ;;
   windows|win32|mingw*|msys*|cygwin*|Windows_NT)
-    copy_one '*/squirrel.windows/x64/*Setup.exe' 'ShareFolder-windows-x64-setup.exe'
+    copy_one '*/wix/x64/*.msi' 'ShareFolder-windows-x64.msi'
     copy_one '*/zip/win32/x64/*.zip' 'ShareFolder-windows-x64.zip'
     ;;
   *)
