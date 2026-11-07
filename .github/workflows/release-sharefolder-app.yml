@@ -22,7 +22,7 @@ jobs:
         include:
           - os: ubuntu-22.04
             platform: linux
-          - os: macos-14
+          - os: macos-15
             platform: darwin
           - os: windows-2022
             platform: windows
