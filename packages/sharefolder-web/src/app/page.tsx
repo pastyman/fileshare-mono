@@ -82,8 +82,9 @@ export default function Home() {
           </ul>
 
           <p className="mt-8 text-sm text-[var(--sf-ink-muted)]">
-            macOS builds are unsigned for now — right-click → Open the first
-            time if Gatekeeper blocks them. On Ubuntu, App Center often cannot
+            On Mac, open the .dmg and drag ShareFolder into Applications.
+            Builds are unsigned for now — if Gatekeeper blocks it, right-click
+            the app → Open the first time. On Ubuntu, App Center often cannot
             uninstall a local .deb; remove it with{' '}
             <code className="rounded bg-black/5 px-1.5 py-0.5 font-mono text-[0.9em] text-[var(--sf-ink)]">
               sudo apt remove sharefolder

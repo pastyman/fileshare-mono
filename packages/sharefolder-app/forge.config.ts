@@ -1,5 +1,6 @@
 import type { ForgeConfig } from '@electron-forge/shared-types';
 import { MakerWix } from '@electron-forge/maker-wix';
+import { MakerDMG } from '@electron-forge/maker-dmg';
 import { MakerZIP } from '@electron-forge/maker-zip';
 import { MakerDeb } from '@electron-forge/maker-deb';
 import { AutoUnpackNativesPlugin } from '@electron-forge/plugin-auto-unpack-natives';
@@ -14,6 +15,7 @@ import { rendererConfig } from './webpack.renderer.config';
 const iconBase = path.resolve(__dirname, 'assets/icons/icon');
 const iconPng = path.resolve(__dirname, 'assets/icons/icon.png');
 const iconIco = path.resolve(__dirname, 'assets/icons/icon.ico');
+const iconIcns = path.resolve(__dirname, 'assets/icons/icon.icns');
 
 const config: ForgeConfig = {
   packagerConfig: {
@@ -43,8 +45,16 @@ const config: ForgeConfig = {
         chooseDirectory: true,
       },
     }),
-    // Portable archives for every platform (CI renames to stable public filenames).
-    new MakerZIP({}, ['darwin', 'linux', 'win32']),
+    // Standard macOS install: open DMG, drag ShareFolder into Applications.
+    new MakerDMG({
+      name: 'ShareFolder',
+      title: 'Install ShareFolder',
+      icon: iconIcns,
+      format: 'ULFO',
+      overwrite: true,
+    }),
+    // Portable archives for Linux/Windows (CI renames to stable public filenames).
+    new MakerZIP({}, ['linux', 'win32']),
     new MakerDeb({
       options: {
         name: 'sharefolder',

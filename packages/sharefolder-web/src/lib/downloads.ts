@@ -25,8 +25,8 @@ export const SHAREFOLDER_DOWNLOADS: ShareFolderDownload[] = [
   {
     id: 'mac-arm',
     label: 'macOS',
-    file: 'ShareFolder-mac-arm64.zip',
-    hint: 'Apple Silicon',
+    file: 'ShareFolder-mac-arm64.dmg',
+    hint: 'Installer (.dmg)',
   },
   {
     id: 'windows',
