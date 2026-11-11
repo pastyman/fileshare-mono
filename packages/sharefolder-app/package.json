@@ -1,7 +1,7 @@
 {
   "name": "sharefolder-app",
   "productName": "sharefolder",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Share a local folder over the web with peer-to-peer transfers",
   "main": ".webpack/main",
   "private": true,

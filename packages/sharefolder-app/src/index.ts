@@ -13,7 +13,15 @@ process.on('uncaughtException', (err: NodeJS.ErrnoException) => {
   console.error('Uncaught exception in main process:', err);
 });
 
-import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  Menu,
+  nativeImage,
+  shell,
+} from 'electron';
 import * as path from 'path';
 import * as fsp from 'fs/promises';
 import {
@@ -102,6 +110,38 @@ function listLiveSessions(): LiveSession[] {
   );
 }
 
+/** Release builds: no File/Edit/View menu bar. Dev keeps the default menu. */
+function applyReleaseMenu() {
+  if (!app.isPackaged) return;
+
+  if (process.platform === 'darwin') {
+    // macOS needs an app menu for Quit / Hide; keep Edit for text-field shortcuts.
+    Menu.setApplicationMenu(
+      Menu.buildFromTemplate([
+        {
+          label: app.name,
+          submenu: [
+            { role: 'about' },
+            { type: 'separator' },
+            { role: 'services' },
+            { type: 'separator' },
+            { role: 'hide' },
+            { role: 'hideOthers' },
+            { role: 'unhide' },
+            { type: 'separator' },
+            { role: 'quit' },
+          ],
+        },
+        { role: 'editMenu' },
+        { role: 'windowMenu' },
+      ])
+    );
+    return;
+  }
+
+  Menu.setApplicationMenu(null);
+}
+
 const createWindow = (): void => {
   const iconPath = resolveAppIconPath();
   const icon = iconPath ? nativeImage.createFromPath(iconPath) : undefined;
@@ -138,6 +178,8 @@ const createWindow = (): void => {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.on('ready', async () => {
+  applyReleaseMenu();
+
   try {
     // Initialize database
     await database.initialize();

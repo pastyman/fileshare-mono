@@ -54,6 +54,11 @@
     <control>keyboard</control>
   </recommends>
   <releases>
+    <release version="1.0.7" date="2026-11-11">
+      <description>
+        <p>Hide the File/Edit menu bar in release builds. Keep App Center packaging improvements from 1.0.6.</p>
+      </description>
+    </release>
     <release version="1.0.6" date="2026-11-11">
       <description>
         <p>Improved Linux packaging for Ubuntu App Center: AppStream metadata, license, icons, and longer description.</p>
