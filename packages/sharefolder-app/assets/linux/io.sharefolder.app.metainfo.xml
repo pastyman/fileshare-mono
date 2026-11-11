@@ -54,6 +54,11 @@
     <control>keyboard</control>
   </recommends>
   <releases>
+    <release version="1.0.9" date="2026-11-11">
+      <description>
+        <p>Fix release CI lockfile sync. No application menu in packaged builds on any platform.</p>
+      </description>
+    </release>
     <release version="1.0.8" date="2026-11-11">
       <description>
         <p>Remove the application menu entirely in release builds on all platforms, including macOS.</p>
