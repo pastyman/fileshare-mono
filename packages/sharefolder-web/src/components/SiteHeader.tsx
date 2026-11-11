@@ -3,10 +3,13 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
+const MARKETING_PATHS = new Set(['/', '/how-it-works']);
+
 export function SiteHeader() {
   const pathname = usePathname();
   const isHome = pathname === '/';
-  const isShareRoute = pathname !== '/' && !pathname.startsWith('/api');
+  const isMarketing = MARKETING_PATHS.has(pathname);
+  const isShareRoute = !isMarketing && !pathname.startsWith('/api');
 
   return (
     <header
@@ -38,6 +41,16 @@ export function SiteHeader() {
               Download
             </Link>
           )}
+          <Link
+            href="/how-it-works"
+            className={`transition-colors hover:text-[var(--sf-ink)] ${
+              pathname === '/how-it-works'
+                ? 'text-[var(--sf-ink)]'
+                : 'text-[var(--sf-ink-muted)]'
+            }`}
+          >
+            How it works
+          </Link>
           {isShareRoute && (
             <Link
               href="/"

@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  AppStream metadata for Ubuntu App Center / GNOME Software / KDE Discover.
+  Installed to /usr/share/metainfo/io.sharefolder.app.metainfo.xml
+-->
+<component type="desktop-application">
+  <id>io.sharefolder.app</id>
+  <launchable type="desktop-id">sharefolder.desktop</launchable>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>ShareFolder</name>
+  <summary>Share a local folder over the web with peer-to-peer transfers</summary>
+  <description>
+    <p>
+      ShareFolder turns a folder on your computer into a private download link.
+      People you share with receive files directly from your machine over an
+      encrypted peer-to-peer connection — nothing is uploaded to a central server.
+    </p>
+    <p>What you can do:</p>
+    <ul>
+      <li>Pick any local folder and get a link you can send</li>
+      <li>Transfer files peer-to-peer with live progress</li>
+      <li>Keep sharing under your control; stop anytime by closing the app</li>
+    </ul>
+  </description>
+  <developer id="io.sharefolder">
+    <name>Paris Val Baker</name>
+  </developer>
+  <url type="homepage">https://sharefolder.io</url>
+  <url type="bugtracker">https://github.com/pastyman/fileshare-mono/issues</url>
+  <url type="vcs-browser">https://github.com/pastyman/fileshare-mono</url>
+  <branding>
+    <color type="primary" scheme_preference="light">#2a8f68</color>
+    <color type="primary" scheme_preference="dark">#1f6b4f</color>
+  </branding>
+  <categories>
+    <category>Network</category>
+    <category>Utility</category>
+  </categories>
+  <keywords>
+    <keyword>file sharing</keyword>
+    <keyword>peer to peer</keyword>
+    <keyword>p2p</keyword>
+    <keyword>folder</keyword>
+    <keyword>transfer</keyword>
+  </keywords>
+  <provides>
+    <binary>sharefolder</binary>
+  </provides>
+  <icon type="stock">sharefolder</icon>
+  <content_rating type="oars-1.1"/>
+  <recommends>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </recommends>
+  <releases>
+    <release version="1.0.6" date="2026-11-11">
+      <description>
+        <p>Improved Linux packaging for Ubuntu App Center: AppStream metadata, license, icons, and longer description.</p>
+      </description>
+    </release>
+    <release version="1.0.5" date="2026-11-10"/>
+  </releases>
+</component>

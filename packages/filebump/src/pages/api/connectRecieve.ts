@@ -1,6 +1,7 @@
 import { getORMi } from "orm"
 import { Connect } from "types"
 import { NextApiRequest, NextApiResponse } from "next"
+import { trackDaily, trackPinMatched } from "../../lib/usage"
 
 // eslint-disable-next-line import/no-anonymous-default-export
 export default async function (req: NextApiRequest, res: NextApiResponse) {
@@ -21,11 +22,13 @@ export default async function (req: NextApiRequest, res: NextApiResponse) {
   })
 
   if (!result) {
+    trackDaily("pinsIncorrect")
     return res.status(400).json({ message: "invalid secret" })
   }
 
   //update peerId
   await ConnectModel.findByIdAndUpdate(result.id, { $set: { peerId } })
+  trackPinMatched(result.clientId, peerId)
 
   return res.status(200).json({ message: "saved", peerId: result.clientId })
 }

@@ -1,5 +1,7 @@
 import {
   SHAREFOLDER_DOWNLOADS,
+  SHAREFOLDER_INSTALL_GUIDES,
+  SHAREFOLDER_RELEASES_URL,
   sharefolderDownloadUrl,
 } from '@/lib/downloads';
 
@@ -37,7 +39,7 @@ export default function Home() {
             Download the app
           </a>
           <a
-            href="#how-it-works"
+            href="/how-it-works"
             className="inline-flex items-center px-6 py-3 text-sm font-semibold text-[var(--sf-ink)] transition hover:text-[var(--sf-accent)]"
           >
             How it works
@@ -81,76 +83,51 @@ export default function Home() {
             ))}
           </ul>
 
+          <div className="mt-12 grid gap-8 sm:grid-cols-3">
+            {SHAREFOLDER_INSTALL_GUIDES.map((guide) => (
+              <div key={guide.id}>
+                <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--sf-accent)]">
+                  {guide.label}
+                </h3>
+                <ol className="mt-3 list-decimal space-y-2 pl-4 text-sm leading-relaxed text-[var(--sf-ink-muted)]">
+                  {guide.steps.map((step) => (
+                    <li key={step}>{step}</li>
+                  ))}
+                </ol>
+              </div>
+            ))}
+          </div>
+
           <p className="mt-8 text-sm text-[var(--sf-ink-muted)]">
-            macOS builds are unsigned for now — right-click → Open the first
-            time if Gatekeeper blocks them. On Ubuntu, App Center often cannot
-            uninstall a local .deb; remove it with{' '}
-            <code className="rounded bg-black/5 px-1.5 py-0.5 font-mono text-[0.9em] text-[var(--sf-ink)]">
-              sudo apt remove sharefolder
-            </code>
-            . Releases:{' '}
+            All builds:{' '}
             <a
-              href="https://github.com/pastyman/fileshare-mono/releases"
+              href={SHAREFOLDER_RELEASES_URL}
               className="font-medium text-[var(--sf-ink)] underline-offset-2 hover:underline"
             >
-              GitHub
+              GitHub Releases
             </a>
             .
           </p>
         </div>
       </section>
 
-      <section
-        id="how-it-works"
-        className="relative border-t border-[var(--sf-line)]"
-      >
-        <div className="mx-auto grid max-w-6xl gap-12 px-6 py-20 md:grid-cols-[1.1fr_1fr] md:gap-16">
-          <div>
+      <section className="relative border-t border-[var(--sf-line)]">
+        <div className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-20 md:flex-row md:items-end md:justify-between">
+          <div className="max-w-xl">
             <h2 className="sf-display text-4xl text-[var(--sf-ink)] sm:text-5xl">
-              Three steps
+              See the path
             </h2>
-            <p className="mt-4 max-w-md text-[var(--sf-ink-muted)]">
-              No uploads to the cloud. Files move peer-to-peer once you open the
-              link.
+            <p className="mt-4 text-[var(--sf-ink-muted)]">
+              Watch signaling through ShareFolder servers, then a direct
+              peer-to-peer handoff — files never upload to the cloud.
             </p>
           </div>
-
-          <ol className="space-y-8">
-            <li className="border-l-2 border-[var(--sf-accent)] pl-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--sf-accent)]">
-                01
-              </p>
-              <h3 className="mt-2 text-xl font-semibold text-[var(--sf-ink)]">
-                Share a folder
-              </h3>
-              <p className="mt-2 text-[var(--sf-ink-muted)]">
-                Pick a folder in the ShareFolder desktop app and copy its link.
-              </p>
-            </li>
-            <li className="border-l-2 border-[var(--sf-line)] pl-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--sf-ink-muted)]">
-                02
-              </p>
-              <h3 className="mt-2 text-xl font-semibold text-[var(--sf-ink)]">
-                Open the link
-              </h3>
-              <p className="mt-2 text-[var(--sf-ink-muted)]">
-                The browser connects to your running desktop app over WebRTC.
-              </p>
-            </li>
-            <li className="border-l-2 border-[var(--sf-line)] pl-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--sf-ink-muted)]">
-                03
-              </p>
-              <h3 className="mt-2 text-xl font-semibold text-[var(--sf-ink)]">
-                Browse and download
-              </h3>
-              <p className="mt-2 text-[var(--sf-ink-muted)]">
-                Drill into subfolders and pull files straight from the host
-                machine.
-              </p>
-            </li>
-          </ol>
+          <a
+            href="/how-it-works"
+            className="inline-flex items-center self-start border border-[var(--sf-ink)] px-6 py-3 text-sm font-semibold text-[var(--sf-ink)] transition hover:border-[var(--sf-accent)] hover:text-[var(--sf-accent)]"
+          >
+            How it works
+          </a>
         </div>
       </section>
 

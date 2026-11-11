@@ -22,18 +22,31 @@ copy_one() {
   echo "Collected ${dest} <- ${match}"
 }
 
+copy_by_name() {
+  local name_pattern="$1"
+  local dest="$2"
+  local match
+  match="$(find "${MAKE_DIR}" -type f -name "${name_pattern}" | head -n 1 || true)"
+  if [[ -z "${match}" ]]; then
+    echo "Missing artifact for ${dest} (name: ${name_pattern})" >&2
+    return 1
+  fi
+  cp "${match}" "${OUT_DIR}/${dest}"
+  echo "Collected ${dest} <- ${match}"
+}
+
 case "${PLATFORM}" in
   linux|Linux)
     copy_one '*/deb/x64/*.deb' 'ShareFolder-linux-amd64.deb'
+    # postMake already enriches; re-run so collected artifacts stay App-Center ready
+    # even if someone copies a raw forge output.
+    chmod +x "${ROOT}/scripts/enrich-sharefolder-deb.sh"
+    "${ROOT}/scripts/enrich-sharefolder-deb.sh" "${OUT_DIR}/ShareFolder-linux-amd64.deb"
     copy_one '*/zip/linux/x64/*.zip' 'ShareFolder-linux-x64.zip'
     ;;
   darwin|mac|macos|Darwin)
-    if find "${MAKE_DIR}" -type f -path '*/zip/darwin/arm64/*.zip' | grep -q .; then
-      copy_one '*/zip/darwin/arm64/*.zip' 'ShareFolder-mac-arm64.zip'
-    fi
-    if find "${MAKE_DIR}" -type f -path '*/zip/darwin/x64/*.zip' | grep -q .; then
-      copy_one '*/zip/darwin/x64/*.zip' 'ShareFolder-mac-x64.zip'
-    fi
+    # macos-15 CI produces Apple Silicon; rename to the stable public download name.
+    copy_by_name '*.dmg' 'ShareFolder-mac-arm64.dmg'
     ;;
   windows|win32|mingw*|msys*|cygwin*|Windows_NT)
     copy_one '*/wix/x64/*.msi' 'ShareFolder-windows-x64.msi'

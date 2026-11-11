@@ -10,6 +10,8 @@ import {
   HostRegistrationSchema,
   InstanceSeenSchema,
   DailyStatSchema,
+  FilebumpPairSchema,
+  FilebumpDailyStatSchema,
 } from "./schemas"
 import {
   Messaging,
@@ -17,6 +19,8 @@ import {
   HostRegistration,
   InstanceSeen,
   DailyStat,
+  FilebumpPair,
+  FilebumpDailyStat,
 } from "types"
 
 export const getORMi = (mongoURI: string) => {
@@ -70,12 +74,24 @@ export const getORMi = (mongoURI: string) => {
       DailyStat
     )
 
+    const ModelFilebumpPair = addModelToTypegoose(
+      mongooseInstance.model("filebumpPair", FilebumpPairSchema, "filebump_pairs"),
+      FilebumpPair
+    )
+
+    const ModelFilebumpDailyStat = addModelToTypegoose(
+      mongooseInstance.model("filebumpDailyStat", FilebumpDailyStatSchema, "filebump_daily_stats"),
+      FilebumpDailyStat
+    )
+
     return {
       ModelMessaging,
       ModelConnect,
       ModelHostRegistration,
       ModelInstanceSeen,
       ModelDailyStat,
+      ModelFilebumpPair,
+      ModelFilebumpDailyStat,
     }
   }
 
@@ -87,6 +103,8 @@ export const getORMi = (mongoURI: string) => {
       ModelHostRegistration: ReturnModelType<typeof HostRegistration>,
       ModelInstanceSeen: ReturnModelType<typeof InstanceSeen>,
       ModelDailyStat: ReturnModelType<typeof DailyStat>,
+      ModelFilebumpPair: ReturnModelType<typeof FilebumpPair>,
+      ModelFilebumpDailyStat: ReturnModelType<typeof FilebumpDailyStat>,
     }
   > = {}
   const getClient = () => {
@@ -101,6 +119,8 @@ export const getORMi = (mongoURI: string) => {
   const getHostRegistrationModel = () => getClient().ModelHostRegistration
   const getInstanceSeenModel = () => getClient().ModelInstanceSeen
   const getDailyStatModel = () => getClient().ModelDailyStat
+  const getFilebumpPairModel = () => getClient().ModelFilebumpPair
+  const getFilebumpDailyStatModel = () => getClient().ModelFilebumpDailyStat
 
   return {
     getMessagingModel,
@@ -108,6 +128,8 @@ export const getORMi = (mongoURI: string) => {
     getHostRegistrationModel,
     getInstanceSeenModel,
     getDailyStatModel,
+    getFilebumpPairModel,
+    getFilebumpDailyStatModel,
   }
 }
 

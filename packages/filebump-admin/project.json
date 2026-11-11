@@ -1,0 +1,46 @@
+{
+  "name": "filebump-admin",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/filebump-admin",
+  "projectType": "application",
+  "tags": [],
+  "targets": {
+    "build": {
+      "executor": "@nx/next:build",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "outputPath": "dist/packages/filebump-admin"
+      },
+      "configurations": {
+        "development": {
+          "outputPath": "packages/filebump-admin"
+        },
+        "production": {}
+      }
+    },
+    "serve": {
+      "executor": "@nx/next:server",
+      "defaultConfiguration": "development",
+      "options": {
+        "buildTarget": "filebump-admin:build",
+        "dev": true
+      },
+      "configurations": {
+        "development": {
+          "buildTarget": "filebump-admin:build:development",
+          "dev": true,
+          "port": 7021
+        },
+        "production": {
+          "buildTarget": "filebump-admin:build:production",
+          "dev": false,
+          "port": 7021
+        }
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

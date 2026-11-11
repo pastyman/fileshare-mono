@@ -1,6 +1,7 @@
 import { getORMi } from "orm"
 import { Connect } from "types"
 import { NextApiRequest, NextApiResponse } from "next"
+import { trackDaily } from "../../lib/usage"
 
 // eslint-disable-next-line import/no-anonymous-default-export
 export default async function (req: NextApiRequest, res: NextApiResponse) {
@@ -18,6 +19,7 @@ export default async function (req: NextApiRequest, res: NextApiResponse) {
     secret: secret,
     timestamp: Date.now()
   })
+  trackDaily("pinsCreated")
 
   return res.status(200).json({ message: "saved", secret })
 }

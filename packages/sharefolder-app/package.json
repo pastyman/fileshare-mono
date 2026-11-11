@@ -1,8 +1,8 @@
 {
   "name": "sharefolder-app",
   "productName": "sharefolder",
-  "version": "1.0.4",
-  "description": "ShareFolder Electron application",
+  "version": "1.0.6",
+  "description": "Share a local folder over the web with peer-to-peer transfers",
   "main": ".webpack/main",
   "private": true,
   "scripts": {
@@ -42,6 +42,7 @@
   "devDependencies": {
     "@electron-forge/cli": "^7.8.3",
     "@electron-forge/maker-deb": "^7.8.3",
+    "@electron-forge/maker-dmg": "^7.11.2",
     "@electron-forge/maker-rpm": "^7.8.3",
     "@electron-forge/maker-wix": "^7.11.2",
     "@electron-forge/maker-zip": "^7.8.3",
