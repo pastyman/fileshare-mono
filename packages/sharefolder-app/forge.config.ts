@@ -7,15 +7,48 @@ import { AutoUnpackNativesPlugin } from '@electron-forge/plugin-auto-unpack-nati
 import { WebpackPlugin } from '@electron-forge/plugin-webpack';
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
 
 import { mainConfig } from './webpack.main.config';
 import { rendererConfig } from './webpack.renderer.config';
 
 const iconBase = path.resolve(__dirname, 'assets/icons/icon');
-const iconPng = path.resolve(__dirname, 'assets/icons/icon.png');
 const iconIco = path.resolve(__dirname, 'assets/icons/icon.ico');
 const iconIcns = path.resolve(__dirname, 'assets/icons/icon.icns');
+const linuxIcons = path.resolve(__dirname, 'assets/linux/icons');
+const linuxAssets = path.resolve(__dirname, 'assets/linux');
+const appLicense = path.resolve(__dirname, 'LICENSE');
+
+const shortDescription =
+  'Share a local folder over the web with peer-to-peer transfers';
+
+const productDescription = [
+  'ShareFolder turns a folder on your computer into a private download link.',
+  'Recipients get files directly from your machine over an encrypted peer-to-peer',
+  'connection — nothing is uploaded to a central server.',
+  '',
+  'Features:',
+  ' - Share any local folder with a link you control',
+  ' - Peer-to-peer transfers with live progress',
+  ' - Stop sharing anytime by closing the app',
+  '',
+  'Homepage: https://sharefolder.io',
+].join('\n');
+
+/** electron-installer-debian accepts a resolution→path map for hicolor icons. */
+const debIcons: Record<string, string> = {
+  scalable: path.join(linuxIcons, 'scalable/apps/sharefolder.svg'),
+  '16x16': path.join(linuxIcons, '16x16/apps/sharefolder.png'),
+  '24x24': path.join(linuxIcons, '24x24/apps/sharefolder.png'),
+  '32x32': path.join(linuxIcons, '32x32/apps/sharefolder.png'),
+  '48x48': path.join(linuxIcons, '48x48/apps/sharefolder.png'),
+  '64x64': path.join(linuxIcons, '64x64/apps/sharefolder.png'),
+  '128x128': path.join(linuxIcons, '128x128/apps/sharefolder.png'),
+  '256x256': path.join(linuxIcons, '256x256/apps/sharefolder.png'),
+  '512x512': path.join(linuxIcons, '512x512/apps/sharefolder.png'),
+};
 
 const config: ForgeConfig = {
   packagerConfig: {
@@ -30,7 +63,7 @@ const config: ForgeConfig = {
   makers: [
     new MakerWix({
       name: 'ShareFolder',
-      description: 'Share a local folder over the web with peer-to-peer transfers',
+      description: shortDescription,
       manufacturer: 'ShareFolder',
       exe: 'sharefolder.exe',
       icon: iconIco,
@@ -59,16 +92,42 @@ const config: ForgeConfig = {
       options: {
         name: 'sharefolder',
         productName: 'ShareFolder',
-        genericName: 'ShareFolder',
+        genericName: 'File Sharing',
         bin: 'sharefolder',
-        icon: iconPng,
-        description: 'Share a local folder over the web with peer-to-peer transfers',
+        // Runtime supports a size map; forge types only declare string.
+        icon: debIcons as unknown as string,
+        description: shortDescription,
+        productDescription,
+        section: 'net',
+        priority: 'optional',
         categories: ['Network', 'Utility'],
-        maintainer: 'Paris Val Baker',
+        maintainer: 'Paris Val Baker <parisvalbaker@yahoo.co.uk>',
         homepage: 'https://sharefolder.io',
+        desktopTemplate: path.join(linuxAssets, 'sharefolder.desktop.ejs'),
+        scripts: {
+          postinst: path.join(linuxAssets, 'debian/postinst'),
+          postrm: path.join(linuxAssets, 'debian/postrm'),
+        },
       },
     }),
   ],
+  hooks: {
+    // electron-installer-debian copies <app>/LICENSE into /usr/share/doc/.../copyright.
+    // Replace Electron's bundled LICENSE with ShareFolder's MIT text.
+    packageAfterCopy: async (_forgeConfig, buildPath) => {
+      await fs.promises.copyFile(appLicense, path.join(buildPath, 'LICENSE'));
+    },
+    // Inject AppStream metainfo so Ubuntu App Center shows icon, license, long description.
+    postMake: async (_forgeConfig, makeResults) => {
+      const enrich = path.resolve(__dirname, '../../scripts/enrich-sharefolder-deb.sh');
+      for (const result of makeResults) {
+        for (const artifact of result.artifacts) {
+          if (!artifact.endsWith('.deb')) continue;
+          execFileSync('bash', [enrich, artifact], { stdio: 'inherit' });
+        }
+      }
+    },
+  },
   plugins: [
     new AutoUnpackNativesPlugin({}),
     new WebpackPlugin({
@@ -98,7 +157,7 @@ const config: ForgeConfig = {
         ],
       },
     }),
-    // Fuses are used to enable/disable various Electron functionality
+    // Fuses are used to enable/disable Electron functionality
     // at package time, before code signing the application
     new FusesPlugin({
       version: FuseVersion.V1,

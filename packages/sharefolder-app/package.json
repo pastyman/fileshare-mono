@@ -1,8 +1,8 @@
 {
   "name": "sharefolder-app",
   "productName": "sharefolder",
-  "version": "1.0.5",
-  "description": "ShareFolder Electron application",
+  "version": "1.0.6",
+  "description": "Share a local folder over the web with peer-to-peer transfers",
   "main": ".webpack/main",
   "private": true,
   "scripts": {

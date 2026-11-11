@@ -38,6 +38,10 @@ copy_by_name() {
 case "${PLATFORM}" in
   linux|Linux)
     copy_one '*/deb/x64/*.deb' 'ShareFolder-linux-amd64.deb'
+    # postMake already enriches; re-run so collected artifacts stay App-Center ready
+    # even if someone copies a raw forge output.
+    chmod +x "${ROOT}/scripts/enrich-sharefolder-deb.sh"
+    "${ROOT}/scripts/enrich-sharefolder-deb.sh" "${OUT_DIR}/ShareFolder-linux-amd64.deb"
     copy_one '*/zip/linux/x64/*.zip' 'ShareFolder-linux-x64.zip'
     ;;
   darwin|mac|macos|Darwin)

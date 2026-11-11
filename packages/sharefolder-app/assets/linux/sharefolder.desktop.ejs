@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=<%= productName %>
+Comment=<%= description %>
+GenericName=<%= genericName || productName %>
+Exec=<%= bin || name %> %U
+Icon=<%= name %>
+Type=Application
+Terminal=false
+StartupNotify=true
+StartupWMClass=ShareFolder
+Categories=<%= (categories || []).join(';') %>;
+Keywords=files;sharing;p2p;folder;transfer;
