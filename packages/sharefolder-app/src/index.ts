@@ -110,35 +110,9 @@ function listLiveSessions(): LiveSession[] {
   );
 }
 
-/** Release builds: no File/Edit/View menu bar. Dev keeps the default menu. */
+/** Release builds: no application menu (File/Edit/Quit). Dev keeps the default. */
 function applyReleaseMenu() {
   if (!app.isPackaged) return;
-
-  if (process.platform === 'darwin') {
-    // macOS needs an app menu for Quit / Hide; keep Edit for text-field shortcuts.
-    Menu.setApplicationMenu(
-      Menu.buildFromTemplate([
-        {
-          label: app.name,
-          submenu: [
-            { role: 'about' },
-            { type: 'separator' },
-            { role: 'services' },
-            { type: 'separator' },
-            { role: 'hide' },
-            { role: 'hideOthers' },
-            { role: 'unhide' },
-            { type: 'separator' },
-            { role: 'quit' },
-          ],
-        },
-        { role: 'editMenu' },
-        { role: 'windowMenu' },
-      ])
-    );
-    return;
-  }
-
   Menu.setApplicationMenu(null);
 }
 

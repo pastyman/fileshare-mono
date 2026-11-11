@@ -54,6 +54,11 @@
     <control>keyboard</control>
   </recommends>
   <releases>
+    <release version="1.0.8" date="2026-11-11">
+      <description>
+        <p>Remove the application menu entirely in release builds on all platforms, including macOS.</p>
+      </description>
+    </release>
     <release version="1.0.7" date="2026-11-11">
       <description>
         <p>Hide the File/Edit menu bar in release builds. Keep App Center packaging improvements from 1.0.6.</p>
