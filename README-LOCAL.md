@@ -1,4 +1,6 @@
 filebump:
+# npx nx serve filebump        # :7001
+# npx nx serve filebump-admin  # :7021 owner stats (needs ADMIN_PASSWORD in packages/filebump-admin/.env.local)
 
 cloudflared tunnel run --url http://localhost:7001 --token eyJhIjoiMjUyOTg2NTNhYTc2NzQ4MzVjZTA4NThkOTUzNjJlYjgiLCJ0IjoiMTNjM2I5YWQtYTg2MC00NzU0LTk5MWYtMjA0NDBiZmQ4NjJlIiwicyI6Ik5qWXhNVGRtTW1RdE1UY3dPUzAwWWprNExXSTFPR1V0TVdJNU9EUTNNbVpqWldaayJ9
 
